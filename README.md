@@ -1,2 +1,37 @@
-# node-tv-android
-NODE TV Android by NODE Development — Free live television streaming with worldwide channels, retro TV design, favorites, and automatic updates.
+# NODE TV Android — v0.1.0
+
+**Developed by NODE Development.** Free IPTV television player for Android phones (Android 8.0+).
+
+Dedicated Android application, not a port of the Windows WPF binary. Source code is written in Java with AndroidX Media3 ExoPlayer (HLS support).
+
+## First version features
+
+- Live Worldwide and Philippines channel directories, loaded from their public M3U playlists.
+- Retro wooden TV frame with the official NODE TV logo; immersive landscape video-only fullscreen.
+- Search, category filter, saved **Favorite TV Channels**, 30 recently watched, last successful channel.
+- Basic playback controls, volume/mute, current video dimensions, visual black-and-white CRT noise and optional low-volume hiss on stream errors / timeout.
+- Eight named color preferences; accent swatch on restart.
+- GitHub Release update checks at launch and every six hours; **NEW UPDATE – UPDATE NOW / LATER** banner.
+- Verified APK download (SHA-256, size) and user-approved Android package installer handoff.
+- No account, monthly hosting, background analytics or custom streaming server.
+
+## Important limits of the first Android build
+
+- Android video engine is **Media3**, not Windows' LibVLC: not all codecs or transport protocols work. HLS is supported; geo-blocked and dead streams can still fail.
+- Program guide (EPG) and remote channel logos are **future Android work**; initial focus is stable basic TV playback and updating.
+- Android never silently installs APKs. The user must approve installation and may need to allow installs from NODE TV.
+- App updates require **a stable release signing key** and an incremented versionCode on each release; temporary Actions debug APKs cannot update one another reliably.
+- Sources of streams are public links with varied availability. Use authorized stream sources, and retain third-party acknowledgments.
+
+## Building without Android Studio
+
+1. Create public GitHub repository `nodedevfivem/NODE-TV-Android`.
+2. Upload this project's contents to repository root, including `.github/workflows/build-apk.yml`.
+3. **Actions → NODE TV Android APK → Run workflow** (or push to main).
+4. After successful Actions build, download artifact `NODE-TV-Android-APK`.
+5. Without signing secrets, output is **DEBUG-TEST-ONLY.apk** for first device testing.
+6. For a real distributable and future updates, configure signing secrets; see `START-HERE-GITHUB-APK-AND-UPDATES.md`.
+
+The Android GitHub repository must match `UpdateClient.java` repository constants. GitHub APK file naming matters to the updater.
+
+Not compiled or tested on Android in the originating environment. Use GitHub Actions to confirm compilation and then test on a phone.

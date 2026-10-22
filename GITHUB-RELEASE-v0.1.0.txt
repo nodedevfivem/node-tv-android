@@ -1,0 +1,71 @@
+TAG: v0.1.0
+TITLE: NODE TV Android v0.1.0 — First Mobile Release
+
+📺 NODE TV Android v0.1.0
+Developed by NODE Development
+Your Live Television Experience — now on Android!
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━
+✨ FIRST ANDROID RELEASE
+━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+✅ WORLDWIDE LIVE TELEVISION
+Browse publicly available TV streams from different countries.
+
+✅ PHILIPPINE CHANNELS
+A dedicated Philippines channel directory.
+
+✅ RETRO TV PLAYER
+Watch television inside our classic wooden TV design.
+
+✅ VIDEO-ONLY FULLSCREEN
+Switch to landscape fullscreen without the vintage borders.
+
+✅ FAVORITE TV CHANNELS
+Save and immediately access your favorite television stations.
+
+✅ RECENTLY WATCHED
+Find recently viewed stations without searching again.
+
+✅ CHANNEL SEARCH & CATEGORIES
+Quickly find channels by name or category.
+
+✅ EIGHT COLOR THEMES
+Select your preferred NODE TV color theme.
+
+✅ NO-SIGNAL RETRO EFFECT
+Moving television static and low-volume hiss when a stream fails.
+
+✅ GITHUB UPDATE NOTIFICATIONS
+New versions will display UPDATE NOW, LATER, and DETAILS.
+APK updates are verified and installed through Android's system installer.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━
+📱 REQUIREMENTS
+━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Android 8.0 or newer
+Internet connection for live television
+Free to download
+No subscription or account required
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━
+📥 INSTALLATION
+━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+1. Download NODE-TV-Android-v0.1.0.apk below.
+2. On your phone, allow installation from the source you trust if prompted.
+3. Install NODE TV and start exploring channels.
+4. Future updates will be announced inside NODE TV.
+
+Stream availability varies. Certain channels may be unavailable, geographically restricted, or incompatible with your device.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━
+🔐 VERIFIED APK
+━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+The official release includes a SHA-256 checksum file.
+Only install the official stable-signed APK for reliable in-place updates.
+
+NODE TV · NODE Development
+Your Live Television Experience.

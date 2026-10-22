@@ -1,0 +1,50 @@
+plugins { id 'com.android.application' }
+
+android {
+    namespace 'net.nodedevelopment.nodetv'
+    compileSdk 35
+
+    defaultConfig {
+        applicationId 'net.nodedevelopment.nodetv'
+        minSdk 26
+        targetSdk 35
+        versionCode 1
+        versionName '0.1.0'
+    }
+
+    signingConfigs {
+        if (project.hasProperty('nodeSigningFile') && file(project.property('nodeSigningFile')).exists()) {
+            release {
+                storeFile file(project.property('nodeSigningFile'))
+                storePassword project.property('nodeSigningStorePassword')
+                keyAlias project.property('nodeSigningKeyAlias')
+                keyPassword project.property('nodeSigningKeyPassword')
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            if (signingConfigs.findByName('release') != null && signingConfigs.release.storeFile != null) {
+                signingConfig signingConfigs.release
+            }
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+    packaging {
+        resources { excludes += ['/META-INF/{AL2.0,LGPL2.1}'] }
+    }
+}
+
+dependencies {
+    def media3 = '1.11.1'
+    implementation "androidx.media3:media3-exoplayer:$media3"
+    implementation "androidx.media3:media3-exoplayer-hls:$media3"
+    implementation "androidx.media3:media3-ui:$media3"
+    implementation 'androidx.core:core:1.16.0'
+}
