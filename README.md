@@ -1,4 +1,4 @@
-# NODE TV Android — v0.1.0
+# NODE TV Android — v0.1.1
 
 **Developed by NODE Development.** Free IPTV television player for Android phones (Android 8.0+).
 
@@ -35,3 +35,6 @@ Dedicated Android application, not a port of the Windows WPF binary. Source code
 The Android GitHub repository must match `UpdateClient.java` repository constants. GitHub APK file naming matters to the updater.
 
 Not compiled or tested on Android in the originating environment. Use GitHub Actions to confirm compilation and then test on a phone.
+
+
+Latest v0.1.1: dual Media3/LibVLC playback compatibility and faster channel retries. See `START-HERE-v0.1.1-ANDROID-PLAYBACK.md`.

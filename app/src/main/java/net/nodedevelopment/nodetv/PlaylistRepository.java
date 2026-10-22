@@ -6,6 +6,7 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
 import java.net.URL;
+import org.json.JSONObject;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -45,9 +46,19 @@ public final class PlaylistRepository {
         } finally {c.disconnect();}
     }
 
+    private static String safeHeader(String value){
+        if(value==null||value.length()>512||value.indexOf('\r')>=0||value.indexOf('\n')>=0)return "";
+        return value.trim();
+    }
+    private static boolean supportedStream(String url) {
+        String low=url.toLowerCase(Locale.ROOT);
+        return low.startsWith("https://")||low.startsWith("http://")||low.startsWith("rtsp://")||
+               low.startsWith("rtsps://")||low.startsWith("rtmp://")||low.startsWith("mms://")||
+               low.startsWith("mmsh://")||low.startsWith("rtp://")||low.startsWith("udp://");
+    }
     public static List<Channel> parse(String m3u, String region) {
         ArrayList<Channel> channels = new ArrayList<>();
-        String title = "",category = "Other",logo = "",tvgId = "";
+        String title = "",category = "Other",logo = "",tvgId = "",referer="",userAgent="";
         boolean expectStream = false;
         BufferedReader reader = new BufferedReader(new InputStreamReader(
                 new java.io.ByteArrayInputStream(m3u.getBytes(StandardCharsets.UTF_8)),StandardCharsets.UTF_8));
@@ -58,7 +69,7 @@ public final class PlaylistRepository {
                 if (line.startsWith("#EXTINF")) {
                     int comma=line.lastIndexOf(',');
                     title=comma>=0 ? line.substring(comma+1).trim() : "Unnamed Channel";
-                    category="Other";logo="";tvgId="";
+                    category="Other";logo="";tvgId="";referer="";userAgent="";
                     Matcher m=ATTR.matcher(line.substring(0,comma>=0?comma:line.length()));
                     while (m.find()) {
                         switch(m.group(1).toLowerCase(Locale.ROOT)) {
@@ -68,10 +79,20 @@ public final class PlaylistRepository {
                         }
                     }
                     expectStream=true;
+                } else if (expectStream && line.startsWith("#EXTVLCOPT:")) {
+                    String opt=line.substring(11).trim();
+                    if(opt.startsWith("http-referrer="))referer=safeHeader(opt.substring(14));
+                    else if(opt.startsWith("http-user-agent="))userAgent=safeHeader(opt.substring(16));
+                } else if (expectStream && line.startsWith("#EXTHTTP:")) {
+                    try {
+                        JSONObject headers=new JSONObject(line.substring(9));
+                        referer=safeHeader(headers.optString("Referer",headers.optString("referer",referer)));
+                        userAgent=safeHeader(headers.optString("User-Agent",userAgent));
+                    }catch(Exception ignored){} // A malformed optional tag does not discard the channel.
                 } else if (!line.isEmpty() && !line.startsWith("#") && expectStream) {
-                    if (line.startsWith("https://") || line.startsWith("http://")) {
+                    if (supportedStream(line)) {
                         channels.add(new Channel(title.isEmpty()?"Unknown Channel":title,line,
-                                category.isEmpty()?"Other":category,logo,tvgId,region));
+                                category.isEmpty()?"Other":category,logo,tvgId,region,referer,userAgent));
                     }
                     expectStream=false;
                 }

@@ -18,6 +18,9 @@ import android.view.ViewGroup;
 import android.view.WindowManager;
 import android.view.inputmethod.InputMethodManager;
 import android.content.Context;
+import android.net.Uri;
+import android.util.Log;
+import android.view.TextureView;
 import android.widget.AdapterView;
 import android.widget.BaseAdapter;
 import android.widget.Button;
@@ -34,6 +37,9 @@ import android.widget.TextView;
 import android.widget.Toast;
 import androidx.annotation.OptIn;
 import androidx.media3.common.MediaItem;
+import androidx.media3.common.MimeTypes;
+import androidx.media3.datasource.DefaultHttpDataSource;
+import androidx.media3.exoplayer.source.DefaultMediaSourceFactory;
 import androidx.media3.common.PlaybackException;
 import androidx.media3.common.Player;
 import androidx.media3.common.VideoSize;
@@ -46,6 +52,8 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Locale;
 import java.util.Set;
 import java.util.concurrent.ExecutorService;
@@ -53,7 +61,7 @@ import java.util.concurrent.Executors;
 
 @OptIn(markerClass = UnstableApi.class)
 public final class MainActivity extends Activity {
-    private static final String VERSION="0.1.0";
+    private static final String VERSION="0.1.1";
     private static final String[] THEMES={"Vintage Amber","NODE Electric Blue","Nebula Violet","Forest Night","Crimson Theater","Graphite","Deep Teal","Copper Sunset"};
     private static final int[] ACCENTS={0xfff0ab4e,0xff42caff,0xffc29bff,0xff69c49a,0xffee7677,0xffb8c0d0,0xff4dd7cc,0xffdc884b};
     private static final int[] BACKGROUNDS={0xff101016,0xff0a1320,0xff14101f,0xff0d1915,0xff1c1014,0xff15161a,0xff0b191b,0xff211611};
@@ -64,6 +72,13 @@ public final class MainActivity extends Activity {
     private final StaticAudio hiss=new StaticAudio();
     private UserStore store;
     private ExoPlayer player;
+    private DefaultHttpDataSource.Factory networkFactory;
+    private VlcFallbackPlayer vlc;
+    private boolean usingVlc, activeSignal;
+    private float broadcastVolume=1f;
+    private static final long EXO_CONNECT_TIMEOUT_MS=11000L;
+    private static final long VLC_CONNECT_TIMEOUT_MS=24000L;
+    private static final String DEFAULT_STREAM_UA="VLC/3.0.21 LibVLC/3.0.21";
     private PlayerView playerView;
     private RetroNoiseView noise;
     private TextView signalLabel,nowPlaying,statusText,countText,qualityText;
@@ -87,9 +102,21 @@ public final class MainActivity extends Activity {
     private File downloadedUpdate;
     private boolean awaitingInstallPermission;
     private boolean downloading;
-    private final Runnable timeout=()->{
-        if(playing!=null && player.getPlaybackState()!=Player.STATE_READY)noReception("NO RECEPTION — stream timed out");
-    };
+    // Timers are scoped to the currently selected channel. Old channel timeouts are cancelled.
+    private Runnable tuneTimeout;
+    private void cancelTuneTimeout(){
+        if(tuneTimeout!=null)ui.removeCallbacks(tuneTimeout);
+        tuneTimeout=null;
+    }
+    private void scheduleTuneTimeout(long millis,long generation,boolean vlcEngine){
+        cancelTuneTimeout();
+        tuneTimeout=()->{
+            if(generation!=playGeneration||playing==null||activeSignal||usingVlc!=vlcEngine)return;
+            if(vlcEngine)finishNoReception("NO RECEPTION — both playback engines timed out");
+            else tryVlcFallback("Stream did not start in time");
+        };
+        ui.postDelayed(tuneTimeout,millis);
+    }
     private final Runnable repeatUpdateChecks=new Runnable(){
         @Override public void run(){checkUpdates(false);ui.postDelayed(this,6L*60*60*1000);}
     };
@@ -99,20 +126,34 @@ public final class MainActivity extends Activity {
         store=new UserStore(this);selectedRegion=store.lastRegion();mode=selectedRegion;accent=ACCENTS[store.theme()];
         getWindow().setStatusBarColor(0xff0c0d11);getWindow().setNavigationBarColor(0xff0c0d11);
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
-        player=new ExoPlayer.Builder(this).build();
+        networkFactory=new DefaultHttpDataSource.Factory()
+            .setAllowCrossProtocolRedirects(true)
+            .setConnectTimeoutMs(12000)
+            .setReadTimeoutMs(16000)
+            .setUserAgent(DEFAULT_STREAM_UA);
+        player=new ExoPlayer.Builder(this)
+            .setMediaSourceFactory(new DefaultMediaSourceFactory(networkFactory)).build();
         playerView=new PlayerView(this);
         playerView.setPlayer(player);playerView.setUseController(false);
         playerView.setResizeMode(AspectRatioFrameLayout.RESIZE_MODE_FIT);
         player.addListener(new Player.Listener(){
             @Override public void onIsPlayingChanged(boolean isPlaying){
-                if(isPlaying&&playing!=null){stopNoise();ui.removeCallbacks(timeout);
-                    store.watched(playing);setStatus("● LIVE — "+playing.title);quality();}
+                if(isPlaying&&playing!=null&&!usingVlc)onPlaybackSucceeded("Android",playGeneration);
             }
             @Override public void onPlaybackStateChanged(int state){
-                if(state==Player.STATE_BUFFERING&&playing!=null)setStatus("Tuning: "+playing.title);
-                else if(state==Player.STATE_ENDED&&playing!=null)noReception("SIGNAL LOST — stream ended");
+                if(usingVlc||playing==null)return;
+                if(state==Player.STATE_BUFFERING){
+                    if(activeSignal) {activeSignal=false;scheduleTuneTimeout(12000,playGeneration,false);}
+                    setStatus("Buffering: "+playing.title);
+                } else if(state==Player.STATE_READY&&player.getPlayWhenReady())onPlaybackSucceeded("Android",playGeneration);
+                else if(state==Player.STATE_ENDED)tryVlcFallback("Channel stream ended");
             }
-            @Override public void onPlayerError(PlaybackException error){noReception("NO RECEPTION — channel unavailable");}
+            @Override public void onPlayerError(PlaybackException error){
+                if(playing!=null&&!usingVlc){
+                    Log.w("NodeTV", "Media3 playback error: "+error.errorCodeName);
+                    tryVlcFallback("Android codec/network compatibility");
+                }
+            }
             @Override public void onVideoSizeChanged(VideoSize v){qualityWidth=v.width;qualityHeight=v.height;quality();}
         });
         buildUi();loadRegion(selectedRegion==1);
@@ -165,6 +206,7 @@ public final class MainActivity extends Activity {
         LinearLayout names=vertical();screenHeader.addView(names,new LinearLayout.LayoutParams(0,-2,1));
         names.addView(label("LIVE TELEVISION",10,accent,true));
         nowPlaying=label("Select a channel to watch",15,0xffeeeae4,true);nowPlaying.setMaxLines(1);nowPlaying.setEllipsize(android.text.TextUtils.TruncateAt.END);names.addView(nowPlaying);
+        Button retry=button("↻ Retry");screenHeader.addView(retry,wrapButton());retry.setOnClickListener(v->{if(playing!=null)tune(playing);});
         Button full=button("⛶ Fullscreen");screenHeader.addView(full,wrapButton());full.setOnClickListener(v->toggleFullscreen());
 
         retroFrame=new FrameLayout(this){@Override protected void onMeasure(int w,int h){
@@ -175,6 +217,17 @@ public final class MainActivity extends Activity {
         videoSlot=new FrameLayout(this);videoSlot.setBackgroundColor(Color.BLACK);
         retroFrame.addView(videoSlot,new FrameLayout.LayoutParams(dp(200),dp(160)));
         videoSlot.addView(playerView,new FrameLayout.LayoutParams(-1,-1));
+        // The LibVLC view stays in the exact same TV viewport. It is only visible on fallback.
+        vlc=new VlcFallbackPlayer(this,new VlcFallbackPlayer.Listener(){
+            @Override public void onPlaying(){
+                if(usingVlc&&playing!=null)onPlaybackSucceeded("VLC",playGeneration);
+            }
+            @Override public void onError(String reason){
+                if(usingVlc&&playing!=null)finishNoReception("NO RECEPTION — "+reason);
+            }
+        });
+        videoSlot.addView(vlc.view(),new FrameLayout.LayoutParams(-1,-1));
+        vlc.view().setVisibility(View.GONE);
         noise=new RetroNoiseView(this);videoSlot.addView(noise,new FrameLayout.LayoutParams(-1,-1));
         signalLabel=label("NO RECEPTION",12,0xfff8e3c2,true);signalLabel.setGravity(Gravity.CENTER);
         signalLabel.setVisibility(View.GONE);videoSlot.addView(signalLabel,new FrameLayout.LayoutParams(-1,-1));
@@ -183,13 +236,22 @@ public final class MainActivity extends Activity {
         wood.setClickable(false);
         LinearLayout controls=horizontal();controls.setPadding(dp(10),dp(4),dp(10),dp(5));controls.setBackgroundColor(PANELS[store.theme()]);
         mainColumn.addView(controls,new LinearLayout.LayoutParams(-1,dp(48)));
-        Button play=goldButton("▶ / ❚❚");controls.addView(play,wrapButton());play.setOnClickListener(v->{if(playing!=null)player.setPlayWhenReady(!player.getPlayWhenReady());});
+        Button play=goldButton("▶ / ❚❚");controls.addView(play,wrapButton());play.setOnClickListener(v->{
+            if(playing!=null){
+                if(usingVlc)vlc.setPaused(!vlc.isPlaying());
+                else player.setPlayWhenReady(!player.getPlayWhenReady());
+            }
+        });
         Button stop=button("■");controls.addView(stop,wrapButton());stop.setOnClickListener(v->stopPlaying());
         Button favorite=button("♡ Favorite");controls.addView(favorite,wrapButton());favorite.setOnClickListener(v->{if(playing!=null){store.toggleFavorite(playing);refreshCollection();toast(store.isFavorite(playing)?"Added to Favorite TV Channels":"Removed from favorites");}});
-        Button mute=button("♬");controls.addView(mute,wrapButton());mute.setOnClickListener(v->{muted=!muted;player.setVolume(muted?0:1f);mute.setText(muted?"Muted":"♬");});
+        Button mute=button("♬");controls.addView(mute,wrapButton());mute.setOnClickListener(v->{
+            muted=!muted;applyBroadcastVolume();mute.setText(muted?"Muted":"♬");
+        });
         SeekBar volume=new SeekBar(this);volume.setMax(100);volume.setProgress(100);
         controls.addView(volume,new LinearLayout.LayoutParams(0,dp(34),1));volume.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener(){
-            public void onProgressChanged(SeekBar s,int p,boolean from){if(from){player.setVolume(p/100f);muted=(p==0);}}
+            public void onProgressChanged(SeekBar s,int p,boolean from){
+                if(from){broadcastVolume=p/100f;muted=(p==0);applyBroadcastVolume();mute.setText(muted?"Muted":"♬");}
+            }
             public void onStartTrackingTouch(SeekBar s){}public void onStopTrackingTouch(SeekBar s){}
         });
         LinearLayout info=horizontal();info.setPadding(dp(12),dp(4),dp(12),dp(5));mainColumn.addView(info);
@@ -297,22 +359,93 @@ public final class MainActivity extends Activity {
     }
     private void refreshCollection(){if(mode==2||mode==3){populateCategories();applyFilter();}else adapter.notifyDataSetChanged();}
     private void tune(Channel channel){
+        // Stopping old playback before preparing the new channel avoids stale audio/video.
+        long generation=++playGeneration;
+        cancelTuneTimeout();
+        usingVlc=false;activeSignal=false;
         playing=channel;
-        qualityWidth=0;qualityHeight=0;quality();
-        nowPlaying.setText(channel.title);setStatus("Tuning "+channel.title+"…");stopNoise();
-        ui.removeCallbacks(timeout);
+        qualityWidth=0;qualityHeight=0;
+        nowPlaying.setText(channel.title);
+        setStatus("Tuning "+channel.title+"…");
+        stopNoise();quality();
         try {
+            vlc.stop();vlc.view().setVisibility(View.GONE);
+            playerView.setVisibility(View.VISIBLE);
             player.stop();player.clearMediaItems();
-            MediaItem item=new MediaItem.Builder().setUri(channel.url).build();
-            player.setMediaItem(item);player.prepare();player.setPlayWhenReady(true);
-            ui.postDelayed(timeout,25000);
-        }catch(Exception e){noReception("NO RECEPTION — cannot open stream");}
+            Map<String,String> properties=new HashMap<>();
+            if(!channel.referer.isEmpty())properties.put("Referer",channel.referer);
+            networkFactory.setDefaultRequestProperties(properties);
+            networkFactory.setUserAgent(channel.userAgent.isEmpty()?DEFAULT_STREAM_UA:channel.userAgent);
+            String scheme=Uri.parse(channel.url).getScheme();
+            if(scheme!=null&&!scheme.equalsIgnoreCase("http")&&!scheme.equalsIgnoreCase("https")){
+                tryVlcFallback("Network protocol requires VLC engine");
+                hideKeyboard();
+                return;
+            }
+            MediaItem.Builder item=new MediaItem.Builder().setUri(Uri.parse(channel.url));
+            String link=channel.url.toLowerCase(Locale.ROOT);
+            // IPTV providers commonly put tokens after the extension; use path not suffix-only matching.
+            if(link.matches("(?s).*\\.m3u8(?:[?#].*)?$"))item.setMimeType(MimeTypes.APPLICATION_M3U8);
+            else if(link.matches("(?s).*\\.mpd(?:[?#].*)?$"))item.setMimeType(MimeTypes.APPLICATION_MPD);
+            player.setMediaItem(item.build());player.prepare();player.setPlayWhenReady(true);
+            scheduleTuneTimeout(EXO_CONNECT_TIMEOUT_MS,generation,false);
+        }catch(Exception ex){
+            Log.w("NodeTV","Media3 could not prepare; trying VLC",ex);
+            tryVlcFallback("Unable to prepare Android playback engine");
+        }
         hideKeyboard();
     }
-    private void stopPlaying(){ui.removeCallbacks(timeout);player.stop();playing=null;stopNoise();quality();setStatus("STANDBY");}
-    private void noReception(String message){ui.removeCallbacks(timeout);setStatus(message);if(noise!=null){noise.showNoise(true);signalLabel.setVisibility(View.VISIBLE);}hiss.start();qualityText.setText("NO SIGNAL");}
+    private void tryVlcFallback(String reason){
+        if(playing==null||usingVlc)return;
+        long generation=playGeneration;
+        usingVlc=true;activeSignal=false;
+        cancelTuneTimeout();
+        player.stop();player.clearMediaItems();
+        playerView.setVisibility(View.GONE);
+        vlc.view().setVisibility(View.VISIBLE);
+        setStatus("Tuning with VLC compatibility mode…");
+        qualityText.setText("VLC CONNECTING");
+        try{
+            vlc.setVolume(muted?0:broadcastVolume);
+            vlc.play(playing);
+            scheduleTuneTimeout(VLC_CONNECT_TIMEOUT_MS,generation,true);
+        }catch(Throwable ex){
+            Log.e("NodeTV","VLC compatibility engine failed",ex);
+            finishNoReception("NO RECEPTION — this stream cannot play on this device");
+        }
+    }
+    private void onPlaybackSucceeded(String engine,long generation){
+        if(playing==null||generation!=playGeneration)return;
+        activeSignal=true;cancelTuneTimeout();stopNoise();
+        store.watched(playing);
+        setStatus("● LIVE ("+engine+") — "+playing.title);
+        quality();
+        if(usingVlc&&qualityWidth==0)qualityText.setText("LIVE • VLC");
+    }
+    private void stopPlaying(){
+        ++playGeneration;cancelTuneTimeout();usingVlc=false;activeSignal=false;
+        player.stop();player.clearMediaItems();vlc.stop();vlc.view().setVisibility(View.GONE);
+        playerView.setVisibility(View.VISIBLE);
+        playing=null;stopNoise();qualityWidth=0;qualityHeight=0;
+        qualityText.setText("STANDBY");setStatus("STANDBY");
+    }
+    private void finishNoReception(String message){
+        if(playing==null)return;
+        cancelTuneTimeout();activeSignal=false;
+        if(usingVlc)vlc.stop();else player.stop();
+        setStatus(message);if(noise!=null){noise.showNoise(true);signalLabel.setVisibility(View.VISIBLE);}
+        hiss.start();qualityText.setText("NO SIGNAL");
+    }
+    private void applyBroadcastVolume(){
+        float value=muted?0f:broadcastVolume;
+        if(player!=null)player.setVolume(value);
+        if(vlc!=null)vlc.setVolume(value);
+    }
     private void stopNoise(){if(noise!=null){noise.showNoise(false);signalLabel.setVisibility(View.GONE);}hiss.stop();}
-    private void quality(){if(qualityText==null)return;qualityText.setText(qualityWidth>0?qualityWidth+"×"+qualityHeight:"LIVE TV");}
+    private void quality(){
+        if(qualityText==null)return;
+        qualityText.setText(qualityWidth>0?qualityWidth+"×"+qualityHeight:(usingVlc?"VLC":"LIVE TV"));
+    }
     private void setStatus(String s){if(statusText!=null)statusText.setText(s);}
     private void toast(String s){Toast.makeText(this,s,Toast.LENGTH_SHORT).show();}
     private void hideKeyboard(){((InputMethodManager)getSystemService(Context.INPUT_METHOD_SERVICE)).hideSoftInputFromWindow(search.getWindowToken(),0);search.clearFocus();}
@@ -320,20 +453,24 @@ public final class MainActivity extends Activity {
     private void toggleFullscreen(){
         if(!fullscreen){
             fullscreen=true;
+            if(usingVlc)vlc.beforeMove();
             retroFrame.removeView(videoSlot);
             fullscreenLayer.addView(videoSlot,new FrameLayout.LayoutParams(-1,-1));
             fullscreenLayer.setVisibility(View.VISIBLE);mainColumn.setVisibility(View.GONE);
             setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE);
             getWindow().getDecorView().setSystemUiVisibility(5894|View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN|View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION);
             fullscreenLayer.setOnClickListener(v->toggleFullscreen());root.requestApplyInsets();
+            if(usingVlc)videoSlot.post(()->vlc.afterMove());
         }else{
             fullscreen=false;
+            if(usingVlc)vlc.beforeMove();
             fullscreenLayer.removeView(videoSlot);
             retroFrame.addView(videoSlot,0,new FrameLayout.LayoutParams(dp(200),dp(160)));
             fullscreenLayer.setVisibility(View.GONE);mainColumn.setVisibility(View.VISIBLE);
             getWindow().getDecorView().setSystemUiVisibility(0);
             setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED);
             retroFrame.post(()->positionSlot(retroFrame.getWidth(),retroFrame.getHeight()));root.requestApplyInsets();
+            if(usingVlc)videoSlot.post(()->vlc.afterMove());
         }
     }
     @Override public void onBackPressed(){if(fullscreen)toggleFullscreen();else super.onBackPressed();}
@@ -403,7 +540,9 @@ public final class MainActivity extends Activity {
     }
     @Override protected void onResume(){super.onResume();if(awaitingInstallPermission&&downloadedUpdate!=null){awaitingInstallPermission=false;if(UpdateClient.canInstall(this))startInstallerIfAllowed();}}
     @Override protected void onDestroy(){
-        ui.removeCallbacksAndMessages(null);hiss.stop();if(player!=null){playerView.setPlayer(null);player.release();}
+        ui.removeCallbacksAndMessages(null);hiss.stop();
+        if(vlc!=null)vlc.release();
+        if(player!=null){playerView.setPlayer(null);player.release();}
         io.shutdownNow();super.onDestroy();
     }
 }

@@ -1,0 +1,18 @@
+TAG: v0.1.1
+TITLE: NODE TV Android v0.1.1 — Better Channel Compatibility
+
+NODE TV Android v0.1.1
+Developed by NODE Development
+
+Improvements:
+• Automatic playback fallback from Android Media3 to VideoLAN LibVLC for IPTV streams that Media3 cannot handle.
+• Better support for stream redirects, HLS playlists, and supported channel-specific HTTP headers.
+• More patient connection recovery before showing NO RECEPTION.
+• Retry action and cleaner channel switching.
+• Playback, volume, favorites, fullscreen and update banner preserved.
+
+Minimum Android: 8.0
+Requires internet access for live television.
+
+IMPORTANT: Only publish the PERMANENTLY-SIGNED APK to official GitHub Releases. Do not publish DEBUG-TEST-ONLY builds.
+Some streams may be offline, geo-restricted or DRM-protected and are not guaranteed.
