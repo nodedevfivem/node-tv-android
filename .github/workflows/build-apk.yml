@@ -1,0 +1,98 @@
+name: NODE TV Android APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths-ignore: ["README.md", "docs/**"]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Gradle 8.11.1
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.11.1'
+
+      - name: Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install SDK 35
+        run: sdkmanager --install 'platforms;android-35' 'build-tools;35.0.0'
+
+      - name: Configure stable release signing
+        id: signing
+        env:
+          NODETV_KEYSTORE_B64: ${{ secrets.NODETV_KEYSTORE_B64 }}
+          NODETV_STORE_PASSWORD: ${{ secrets.NODETV_STORE_PASSWORD }}
+          NODETV_KEY_ALIAS: ${{ secrets.NODETV_KEY_ALIAS }}
+          NODETV_KEY_PASSWORD: ${{ secrets.NODETV_KEY_PASSWORD }}
+        shell: bash
+        run: |
+          if [[ -n "$NODETV_KEYSTORE_B64" && -n "$NODETV_STORE_PASSWORD" && -n "$NODETV_KEY_ALIAS" && -n "$NODETV_KEY_PASSWORD" ]]; then
+            mkdir -p "$HOME/.gradle"
+            echo "$NODETV_KEYSTORE_B64" | base64 --decode > "$RUNNER_TEMP/node-tv-release.jks"
+            chmod 600 "$RUNNER_TEMP/node-tv-release.jks"
+
+            {
+              printf 'nodeSigningFile=%s\n' "$RUNNER_TEMP/node-tv-release.jks"
+              printf 'nodeSigningStorePassword=%s\n' "$NODETV_STORE_PASSWORD"
+              printf 'nodeSigningKeyAlias=%s\n' "$NODETV_KEY_ALIAS"
+              printf 'nodeSigningKeyPassword=%s\n' "$NODETV_KEY_PASSWORD"
+            } > "$HOME/.gradle/gradle.properties"
+
+            chmod 600 "$HOME/.gradle/gradle.properties"
+            echo 'signed=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'signed=false' >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Build release APK
+        if: steps.signing.outputs.signed == 'true'
+        run: gradle --no-daemon :app:assembleRelease
+
+      - name: Build test APK
+        if: steps.signing.outputs.signed != 'true'
+        run: gradle --no-daemon :app:assembleDebug
+
+      - name: Prepare APK and checksum
+        env:
+          SIGNED: ${{ steps.signing.outputs.signed }}
+        shell: bash
+        run: |
+          mkdir -p release-files
+
+          VERSION=$(grep -E "^[[:space:]]*versionName " app/build.gradle | head -1 | sed -E "s/.*'([^']+)'.*/\1/")
+
+          if [[ "$SIGNED" == 'true' ]]; then
+            cp app/build/outputs/apk/release/app-release.apk "release-files/NODE-TV-Android-v${VERSION}.apk"
+
+            (cd release-files && sha256sum "NODE-TV-Android-v${VERSION}.apk" > "NODE-TV-Android-v${VERSION}-SHA256.txt")
+          else
+            cp app/build/outputs/apk/debug/app-debug.apk "release-files/NODE-TV-Android-v${VERSION}-DEBUG-TEST-ONLY.apk"
+
+            echo 'DEBUG APK FOR TESTING ONLY. Do not publish as an official release.' > release-files/DEBUG-ONLY-READ-ME.txt
+          fi
+
+          ls -lh release-files/
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: NODE-TV-Android-APK
+          path: release-files/*
+          retention-days: 14
