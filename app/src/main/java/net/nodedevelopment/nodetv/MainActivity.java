@@ -150,7 +150,7 @@ public final class MainActivity extends Activity {
             }
             @Override public void onPlayerError(PlaybackException error){
                 if(playing!=null&&!usingVlc){
-                    Log.w("NodeTV", "Media3 playback error: "+error.errorCodeName);
+                    Log.w("NodeTV", "Media3 playback error: "+error.getErrorCodeName());
                     tryVlcFallback("Android codec/network compatibility");
                 }
             }
