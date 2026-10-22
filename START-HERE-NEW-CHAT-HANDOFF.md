@@ -1,3 +1,9 @@
+# CURRENT CANONICAL SOURCE — NODE TV Android v0.1.6 (versionCode 7)
+
+Based directly on the COMPLETE NODE TV Android **v0.1.5** full-source ZIP. Read `START-HERE-v0.1.6-FLOATING-CHANNEL-BROWSER.md`. This is SOURCE ONLY: Android compilation, GitHub Actions, phone playback, and update installation are NOT yet verified. Preserve the v0.1.5 root-owned video surface fix and dual engine (Media3 ExoPlayer then LibVLC). The floating translucent Browse Channels sheet must not reparent the live video view or interrupt playback. The official signed APK remains `NODE-TV.apk` plus versioned `NODE-TV-Android-v0.1.6.apk` and `NODE-TV-Android-v0.1.6-SHA256.txt`.
+
+---
+
 # Current milestone: NODE TV Android v0.1.5 source-only candidate
 
 The latest canonical source in this archive is **v0.1.5 (versionCode 6)**, based on v0.1.4, with a stable root-owned videoSlot instead of reparenting the live TextureView on fullscreen/portrait transitions. Fixes reported audio-only black picture after EXIT FULLSCREEN. GitHub Actions uploads 3 individually downloadable signed release files, plus bundle, only when the four permanent signing secrets are configured. Read `START-HERE-v0.1.5-VIDEO-SURFACE-AND-ARTIFACT-FIX.md` before any GitHub Release. Compiling and phone behavior are UNVERIFIED. Older version sections below are history.

@@ -1,0 +1,49 @@
+# 📺 NODE TV Android v0.1.6 — Floating Channel Browser
+
+NODE Development | Android
+
+Introducing a cleaner way to find and change channels while your current television program stays on screen.
+
+## 📺 NEW: FLOATING BROWSE CHANNELS PANEL
+
+- Replaced the cramped two-row portrait channel list with a dedicated **BROWSE CHANNELS** button.
+- Open a dark translucent bottom sheet with the active TV playback visible behind it.
+- See more compact channel rows at once, with smooth independent scrolling for long directories.
+- Search by channel title or category directly within the floating browser.
+- Filter Worldwide, Philippines, Favorites and Recently Watched.
+- Choose an individual channel category from the category dropdown.
+- Highlight the currently playing channel with a **▶ LIVE** badge and theme accent.
+- Favorite/unfavorite channels directly from the browse list.
+- Select a channel to switch streams and automatically close the browser.
+- Close without interrupting playback using **✕ CLOSE**, Android Back, outside tap or swipe down from the sheet handle.
+- Removed long channel lists and filter controls from the main portrait player screen for a cleaner layout.
+- Reused efficient ListView row recycling and existing channel repository; no backend or hosting required.
+
+## 📡 STREAMING AND CONTROLS PRESERVED
+
+- Media3 ExoPlayer primary playback and VideoLAN LibVLC fallback.
+- v0.1.5 stable video surface approach retained; no video surface reparenting while browsing.
+- Retro wooden TV, original NODE TV branding and eight saved themes.
+- Landscape fullscreen, on-screen EXIT FULLSCREEN, brightness and volume gestures, center-tap pause/play.
+- CRT static/no-reception recovery, channel search, favorites and recently watched.
+- GitHub automatic update banner, persistent mandatory update handling and installer checksums.
+
+## 📱 APP INFORMATION
+
+Developer: NODE Development
+Package: net.nodedevelopment.nodetv
+Version: 0.1.6
+Version Code: 7
+Minimum Android: Android 8.0
+
+## 📥 OFFICIAL SIGNED RELEASE ASSETS
+
+NODE-TV.apk
+NODE-TV-Android-v0.1.6.apk
+NODE-TV-Android-v0.1.6-SHA256.txt
+
+Do not publish a TEST-ONLY/debug APK to GitHub Releases. Official updates require the SAME permanent signing certificate as previous production releases and explicit Android installation approval. Publishing the GitHub Release, not merely an Actions artifact, triggers the updater.
+
+Developed by NODE Development — Free to use.
+
+<!-- NODETV_UPDATE_MODE: MANDATORY -->

@@ -15,6 +15,7 @@ import android.os.Looper;
 import android.text.Editable;
 import android.text.TextWatcher;
 import android.view.Gravity;
+import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.WindowManager;
@@ -63,7 +64,7 @@ import java.util.concurrent.Executors;
 
 @OptIn(markerClass = UnstableApi.class)
 public final class MainActivity extends Activity {
-    private static final String VERSION="0.1.5";
+    private static final String VERSION="0.1.6";
     private static final String[] THEMES={"Vintage Amber","NODE Electric Blue","Nebula Violet","Forest Night","Crimson Theater","Graphite","Deep Teal","Copper Sunset"};
     private static final int[] ACCENTS={0xfff0ab4e,0xff42caff,0xffc29bff,0xff69c49a,0xffee7677,0xffb8c0d0,0xff4dd7cc,0xffdc884b};
     private static final int[] BACKGROUNDS={0xff101016,0xff0a1320,0xff14101f,0xff0d1915,0xff1c1014,0xff15161a,0xff0b191b,0xff211611};
@@ -87,7 +88,11 @@ public final class MainActivity extends Activity {
     private RetroNoiseView noise;
     private TextView signalLabel,nowPlaying,statusText,countText,qualityText;
     private FrameLayout root,videoSlot,retroFrame,fullscreenLayer;
-    private LinearLayout mainColumn,updateBanner;
+    private LinearLayout mainColumn,updateBanner,channelBrowserPanel;
+    private FrameLayout channelBrowserOverlay;
+    private TextView browserLaunchCount,browserNowPlaying;
+    private boolean browserOpen;
+    private float browserDragStartY;
     private TextView updateTitle,updateSubtitle;
     private Button updateLaterButton;
     private FrameLayout mandatoryOverlay;
@@ -291,38 +296,21 @@ public final class MainActivity extends Activity {
         LinearLayout info=horizontal();info.setPadding(dp(12),dp(4),dp(12),dp(5));mainColumn.addView(info);
         statusText=label("Channels ready",11,0xffc2b8aa,false);info.addView(statusText,new LinearLayout.LayoutParams(0,dp(22),1));
         qualityText=label("STANDBY",10,accent,true);info.addView(qualityText);
-        // Collections are genuine lists, not mere decoration.
-        HorizontalScrollView tabScroll=new HorizontalScrollView(this);tabScroll.setHorizontalScrollBarEnabled(false);
-        mainColumn.addView(tabScroll,new LinearLayout.LayoutParams(-1,dp(48)));
-        LinearLayout tabs=horizontal();tabs.setPadding(dp(7),dp(3),dp(7),dp(3));tabScroll.addView(tabs);
-        String[] labels={"🌎 Worldwide","🇵🇭 Philippines","♥ FAVORITE TV CHANNELS","◷ Recently Watched"};
-        modeButtons=new Button[labels.length];
-        for(int i=0;i<labels.length;i++){final int selected=i;Button b=(mode==i?goldButton(labels[i]):button(labels[i]));
-            modeButtons[i]=b;tabs.addView(b,wrapButton());b.setOnClickListener(v->setMode(selected));}
-        LinearLayout filters=horizontal();filters.setPadding(dp(9),dp(4),dp(9),dp(4));mainColumn.addView(filters,new LinearLayout.LayoutParams(-1,dp(50)));
-        search=new EditText(this);search.setSingleLine(true);search.setTextColor(Color.WHITE);search.setHintTextColor(0xff999ba4);
-        search.setHint("Search TV channels…");search.setTextSize(13);search.setPadding(dp(12),0,dp(12),0);search.setBackground(bg(0xff272832,7));
-        filters.addView(search,new LinearLayout.LayoutParams(0,dp(41),1));
-        search.addTextChangedListener(new TextWatcher(){public void beforeTextChanged(CharSequence s,int st,int c,int a){}
-            public void onTextChanged(CharSequence s,int start,int before,int count){ui.removeCallbacks(filterDelay);ui.postDelayed(filterDelay,180);}
-            public void afterTextChanged(Editable s){} });
-        categorySpinner=new Spinner(this);categorySpinner.setBackground(bg(0xff2a2b34,7));
-        LinearLayout.LayoutParams catLp=new LinearLayout.LayoutParams(dp(138),dp(41));catLp.leftMargin=dp(7);filters.addView(categorySpinner,catLp);
-        categorySpinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener(){
-            public void onItemSelected(AdapterView<?> parent,View view,int pos,long id){
-                String chosen=String.valueOf(parent.getItemAtPosition(pos));if(!chosen.equals(category)){category=chosen;applyFilter();}}
-            public void onNothingSelected(AdapterView<?> parent){}
-        });
-        LinearLayout browseHead=horizontal();browseHead.setPadding(dp(12),dp(5),dp(12),dp(4));mainColumn.addView(browseHead);
-        TextView browseTitle=label("CHANNEL BROWSER",13,0xffefece6,true);browseHead.addView(browseTitle,new LinearLayout.LayoutParams(0,dp(24),1));
-        countText=label("Loading…",10,0xffa9a9b2,false);browseHead.addView(countText);
-        list=new ListView(this);list.setBackgroundColor(0xff14151b);list.setDividerHeight(dp(3));
-        list.setDivider(new android.graphics.drawable.ColorDrawable(0xff14151b));
-        list.setCacheColorHint(Color.TRANSPARENT);mainColumn.addView(list,new LinearLayout.LayoutParams(-1,0,1));
-        adapter=new ChannelAdapter();list.setAdapter(adapter);
-        list.setOnItemClickListener((parent,v,index,id)->{
-            if(index<filtered.size())tune(filtered.get(index));
-        });
+        // Keep the portrait player uncluttered. Search, filters and the real list live
+        // in a translucent modal sheet, not in a two-row viewport under the TV.
+        LinearLayout browserLauncher=horizontal();
+        browserLauncher.setPadding(dp(12),dp(12),dp(12),dp(8));
+        mainColumn.addView(browserLauncher,new LinearLayout.LayoutParams(-1,dp(71)));
+        Button browse=goldButton("📺  BROWSE CHANNELS   ❯");
+        browse.setTextSize(15);browse.setContentDescription("Browse television channels");
+        browserLauncher.addView(browse,new LinearLayout.LayoutParams(0,dp(50),1));
+        browse.setOnClickListener(v->openChannelBrowser());
+        browserLaunchCount=label("Loading channels…",11,0xffc2b6a6,false);
+        browserLaunchCount.setGravity(Gravity.CENTER);
+        LinearLayout.LayoutParams browseCountParams=new LinearLayout.LayoutParams(dp(94),dp(48));
+        browseCountParams.leftMargin=dp(8);browserLauncher.addView(browserLaunchCount,browseCountParams);
+        // Keeps the theme footer anchored at the bottom on tall phones.
+        mainColumn.addView(new View(this),new LinearLayout.LayoutParams(-1,0,1));
         LinearLayout footer=horizontal();footer.setPadding(dp(10),dp(2),dp(10),dp(2));footer.setBackgroundColor(PANELS[store.theme()]);
         mainColumn.addView(footer,new LinearLayout.LayoutParams(-1,dp(42)));
         Button themeButton=button("🎨 Theme");footer.addView(themeButton,wrapButton());
@@ -384,6 +372,7 @@ public final class MainActivity extends Activity {
         exitParams.setMargins(dp(18),dp(18),dp(18),0);
         fullscreenLayer.addView(fullscreenExitButton,exitParams);
         fullscreenExitButton.setOnClickListener(v->toggleFullscreen());
+        createChannelBrowserOverlay();
         createMandatoryOverlay();
         // Handle rotations, update-banner insertion, and window-inset changes using
         // bounds only. Never remove the live TextureView from its parent.
@@ -391,6 +380,172 @@ public final class MainActivity extends Activity {
         // Start with a real channel catalog, then show whatever is available.
         populateCategories();
     }
+    /** A transparent, bounded overlay above the stable videoSlot; never remove,
+     *  reparent, or restart the player just to browse channels. */
+    private void createChannelBrowserOverlay(){
+        channelBrowserOverlay=new FrameLayout(this);
+        channelBrowserOverlay.setVisibility(View.GONE);
+        root.addView(channelBrowserOverlay,new FrameLayout.LayoutParams(-1,-1));
+
+        View dismissScrim=new View(this);
+        dismissScrim.setBackgroundColor(0x68060910);
+        channelBrowserOverlay.addView(dismissScrim,new FrameLayout.LayoutParams(-1,-1));
+        dismissScrim.setOnClickListener(v->closeChannelBrowser(true));
+
+        channelBrowserPanel=vertical();
+        channelBrowserPanel.setPadding(dp(10),dp(6),dp(10),dp(8));
+        GradientDrawable sheet=new GradientDrawable();
+        sheet.setColor(0xdf1c1c26);
+        sheet.setCornerRadii(new float[]{dp(18),dp(18),dp(18),dp(18),0,0,0,0});
+        sheet.setStroke(dp(1),accent);
+        channelBrowserPanel.setBackground(sheet);
+        channelBrowserPanel.setElevation(dp(15));
+        FrameLayout.LayoutParams panelParams=new FrameLayout.LayoutParams(-1,dp(490),Gravity.BOTTOM);
+        channelBrowserOverlay.addView(channelBrowserPanel,panelParams);
+        root.addOnLayoutChangeListener((v,l,t,r,b,ol,ot,or_,ob)->resizeBrowserPanel());
+
+        // Grab bar is the swipe-down dismissal target. List swipes always scroll
+        // channels, so vertical browsing never accidentally closes the sheet.
+        TextView handle=label("━━━  SWIPE DOWN TO CLOSE",10,0xffc6bcb6,false);
+        handle.setGravity(Gravity.CENTER);
+        channelBrowserPanel.addView(handle,new LinearLayout.LayoutParams(-1,dp(23)));
+        handle.setOnTouchListener((v,event)->{
+            switch(event.getActionMasked()){
+                case MotionEvent.ACTION_DOWN:
+                    browserDragStartY=event.getRawY();return true;
+                case MotionEvent.ACTION_MOVE:
+                    float distance=Math.max(0,event.getRawY()-browserDragStartY);
+                    channelBrowserPanel.setTranslationY(Math.min(distance,dp(180)));
+                    return true;
+                case MotionEvent.ACTION_UP:
+                    if(event.getRawY()-browserDragStartY>dp(60))closeChannelBrowser(true);
+                    else channelBrowserPanel.animate().translationY(0).setDuration(140).start();
+                    return true;
+                case MotionEvent.ACTION_CANCEL:
+                    channelBrowserPanel.animate().translationY(0).setDuration(140).start();
+                    return true;
+                default:return false;
+            }
+        });
+
+        LinearLayout browserHeader=horizontal();
+        channelBrowserPanel.addView(browserHeader,new LinearLayout.LayoutParams(-1,dp(46)));
+        LinearLayout headerLabels=vertical();
+        browserHeader.addView(headerLabels,new LinearLayout.LayoutParams(0,-2,1));
+        headerLabels.addView(label("📺  BROWSE CHANNELS",17,accent,true));
+        browserNowPlaying=label("Select a channel to watch",10,0xffd3c8ba,false);
+        browserNowPlaying.setMaxLines(1);
+        browserNowPlaying.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        headerLabels.addView(browserNowPlaying);
+        Button close=button("✕ CLOSE");
+        close.setContentDescription("Close channel browser and keep watching");
+        browserHeader.addView(close,new LinearLayout.LayoutParams(dp(82),dp(40)));
+        close.setOnClickListener(v->closeChannelBrowser(true));
+
+        HorizontalScrollView tabScroll=new HorizontalScrollView(this);
+        tabScroll.setHorizontalScrollBarEnabled(false);
+        channelBrowserPanel.addView(tabScroll,new LinearLayout.LayoutParams(-1,dp(48)));
+        LinearLayout tabs=horizontal();tabs.setPadding(0,dp(3),0,dp(3));tabScroll.addView(tabs);
+        String[] labels={"🌎 Worldwide","🇵🇭 Philippines","♥ Favorites","◷ Recently Watched"};
+        modeButtons=new Button[labels.length];
+        for(int i=0;i<labels.length;i++){
+            final int selected=i;
+            Button b=(mode==i?goldButton(labels[i]):button(labels[i]));
+            modeButtons[i]=b;tabs.addView(b,wrapButton());
+            b.setOnClickListener(v->setMode(selected));
+        }
+
+        LinearLayout filters=horizontal();
+        filters.setPadding(0,dp(5),0,dp(7));
+        channelBrowserPanel.addView(filters,new LinearLayout.LayoutParams(-1,dp(56)));
+        search=new EditText(this);
+        search.setSingleLine(true);search.setTextColor(Color.WHITE);
+        search.setHintTextColor(0xffafb0bd);search.setHint("Search channels…");
+        search.setTextSize(13);search.setPadding(dp(12),0,dp(9),0);
+        search.setBackground(bg(0xff30303a,8));
+        filters.addView(search,new LinearLayout.LayoutParams(0,dp(44),1));
+        search.addTextChangedListener(new TextWatcher(){
+            public void beforeTextChanged(CharSequence s,int st,int c,int a){}
+            public void onTextChanged(CharSequence s,int start,int before,int count){
+                ui.removeCallbacks(filterDelay);ui.postDelayed(filterDelay,160);
+            }
+            public void afterTextChanged(Editable s){}
+        });
+        categorySpinner=new Spinner(this);categorySpinner.setBackground(bg(0xff30303a,8));
+        LinearLayout.LayoutParams categoryParams=new LinearLayout.LayoutParams(dp(134),dp(44));
+        categoryParams.leftMargin=dp(7);filters.addView(categorySpinner,categoryParams);
+        categorySpinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener(){
+            public void onItemSelected(AdapterView<?> parent,View view,int position,long id){
+                String chosen=String.valueOf(parent.getItemAtPosition(position));
+                if(!chosen.equals(category)){category=chosen;applyFilter();}
+            }
+            public void onNothingSelected(AdapterView<?> parent){}
+        });
+
+        LinearLayout listHeading=horizontal();
+        channelBrowserPanel.addView(listHeading,new LinearLayout.LayoutParams(-1,dp(30)));
+        TextView listTitle=label("AVAILABLE CHANNELS",11,0xffdfd8d0,true);
+        listHeading.addView(listTitle,new LinearLayout.LayoutParams(0,-1,1));
+        countText=label("Loading…",11,0xffbfb6ae,false);
+        listHeading.addView(countText);
+        list=new ListView(this);
+        list.setBackgroundColor(Color.TRANSPARENT);
+        list.setDivider(new android.graphics.drawable.ColorDrawable(0x556a6260));
+        list.setDividerHeight(dp(1));
+        list.setCacheColorHint(Color.TRANSPARENT);
+        list.setVerticalScrollBarEnabled(true);
+        list.setFastScrollEnabled(true);
+        channelBrowserPanel.addView(list,new LinearLayout.LayoutParams(-1,0,1));
+        adapter=new ChannelAdapter();list.setAdapter(adapter);
+        list.setOnItemClickListener((parent,v,position,id)->{
+            if(position>=0&&position<filtered.size())selectBrowserChannel(filtered.get(position));
+        });
+    }
+
+    private void resizeBrowserPanel(){
+        if(root==null||channelBrowserPanel==null||root.getHeight()<=0)return;
+        // 76% preserves a top preview of the TV, yet typically shows 6-8 compact
+        // channel rows on a phone. Short screens still retain a usable list.
+        int height=Math.round(root.getHeight()*.76f);
+        FrameLayout.LayoutParams params=(FrameLayout.LayoutParams)channelBrowserPanel.getLayoutParams();
+        if(params.height!=height){params.height=height;channelBrowserPanel.setLayoutParams(params);}
+    }
+    private void openChannelBrowser(){
+        if(fullscreen||mandatoryUpdate||channelBrowserOverlay==null||browserOpen)return;
+        browserOpen=true;
+        resizeBrowserPanel();
+        browserNowPlaying.setText(playing==null?"Choose a channel • TV stays on in the background"
+            :"▶ Watching: "+playing.title);
+        applyFilter();
+        channelBrowserOverlay.setVisibility(View.VISIBLE);
+        channelBrowserPanel.animate().cancel();
+        channelBrowserPanel.setTranslationY(Math.max(dp(300),channelBrowserPanel.getHeight()));
+        channelBrowserPanel.animate().translationY(0).setDuration(220).start();
+    }
+    private void closeChannelBrowser(boolean animate){
+        if(!browserOpen||channelBrowserOverlay==null)return;
+        browserOpen=false;
+        ui.removeCallbacks(filterDelay);
+        hideKeyboard();
+        channelBrowserPanel.animate().cancel();
+        if(animate){
+            channelBrowserPanel.animate().translationY(Math.max(dp(300),channelBrowserPanel.getHeight()))
+                .setDuration(170).withEndAction(()->{
+                    if(!browserOpen){channelBrowserOverlay.setVisibility(View.GONE);
+                        channelBrowserPanel.setTranslationY(0);}
+                }).start();
+        }else{
+            channelBrowserOverlay.setVisibility(View.GONE);
+            channelBrowserPanel.setTranslationY(0);
+        }
+    }
+    private void selectBrowserChannel(Channel channel){
+        closeChannelBrowser(false);
+        // Close the overlay before beginning the new stream; the old stream
+        // continues unchanged if the user merely dismisses the browser.
+        tune(channel);
+    }
+
     private final Runnable filterDelay=this::applyFilter;
 
     /** Position video surface WITHOUT changing its parent or destroying native output.
@@ -468,7 +623,9 @@ public final class MainActivity extends Activity {
             if(!query.isEmpty() && !(c.title.toLowerCase(Locale.ROOT).contains(query)||c.category.toLowerCase(Locale.ROOT).contains(query)))continue;
             filtered.add(c);
         }
-        adapter.notifyDataSetChanged();countText.setText(filtered.size()+" shown");
+        adapter.notifyDataSetChanged();
+        if(countText!=null)countText.setText(filtered.size()+" channels");
+        if(browserLaunchCount!=null)browserLaunchCount.setText(filtered.size()+" available");
     }
     private void refreshCollection(){if(mode==2||mode==3){populateCategories();applyFilter();}else adapter.notifyDataSetChanged();}
     private void tune(Channel channel){
@@ -479,6 +636,7 @@ public final class MainActivity extends Activity {
         playing=channel;
         qualityWidth=0;qualityHeight=0;
         nowPlaying.setText(channel.title);
+        if(browserNowPlaying!=null)browserNowPlaying.setText("▶ Watching: "+channel.title);
         setStatus("Tuning "+channel.title+"…");
         stopNoise();quality();
         try {
@@ -540,6 +698,7 @@ public final class MainActivity extends Activity {
         player.stop();player.clearMediaItems();vlc.stop();vlc.view().setVisibility(View.GONE);
         playerView.setVisibility(View.VISIBLE);
         playing=null;stopNoise();qualityWidth=0;qualityHeight=0;
+        if(browserNowPlaying!=null)browserNowPlaying.setText("Select a channel to watch");
         qualityText.setText("STANDBY");setStatus("STANDBY");
     }
     private void finishNoReception(String message){
@@ -623,6 +782,7 @@ public final class MainActivity extends Activity {
     private void toggleFullscreen(){
         if(!fullscreen){
             if(mandatoryUpdate)return;
+            closeChannelBrowser(false);
             originalWindowBrightness=getWindow().getAttributes().screenBrightness;
             fullscreen=true;
             // Keep mainColumn attached and hide it only visually: videoSlot is a root
@@ -657,31 +817,67 @@ public final class MainActivity extends Activity {
             ui.post(this::layoutVideoSlot);
         }
     }
-    @Override public void onBackPressed(){if(fullscreen)toggleFullscreen();else if(mandatoryUpdate){
-        // Android Back cannot bypass a confirmed mandatory update while app is open.
-        toast("NODE TV requires an update to continue.");
-    }else super.onBackPressed();}
+    @Override public void onBackPressed(){
+        if(mandatoryUpdate){
+            // Android Back cannot bypass a confirmed mandatory update.
+            toast("NODE TV requires an update to continue.");
+        }else if(browserOpen)closeChannelBrowser(true);
+        else if(fullscreen)toggleFullscreen();
+        else super.onBackPressed();
+    }
 
+    private static final class ChannelRowHolder {
+        TextView title,details,nowPlayingBadge;
+        Button favorite;
+    }
     private final class ChannelAdapter extends BaseAdapter {
         @Override public int getCount(){return filtered.size();}
         @Override public Object getItem(int pos){return filtered.get(pos);}
         @Override public long getItemId(int pos){return pos;}
         @Override public View getView(int pos,View old,ViewGroup parent){
-            LinearLayout row;TextView texts;Button star;
-            if(old instanceof LinearLayout){row=(LinearLayout)old;texts=(TextView)row.getChildAt(0);star=(Button)row.getChildAt(1);}
-            else {
-                row=horizontal();row.setPadding(dp(11),dp(4),dp(8),dp(4));row.setBackground(bg(ROWS[store.theme()],8));
-                texts=label("",13,0xffeeeae3,true);texts.setMaxLines(2);texts.setEllipsize(android.text.TextUtils.TruncateAt.END);
-                row.addView(texts,new LinearLayout.LayoutParams(0,dp(58),1));
-                star=button("♡");row.addView(star,new LinearLayout.LayoutParams(dp(44),dp(44)));
+            LinearLayout row;
+            ChannelRowHolder holder;
+            if(old instanceof LinearLayout && old.getTag() instanceof ChannelRowHolder){
+                row=(LinearLayout)old;
+                holder=(ChannelRowHolder)old.getTag();
+            }else{
+                row=horizontal();row.setPadding(dp(10),dp(3),dp(6),dp(3));
+                holder=new ChannelRowHolder();
+                LinearLayout names=vertical();names.setGravity(Gravity.CENTER_VERTICAL);
+                row.addView(names,new LinearLayout.LayoutParams(0,dp(57),1));
+                holder.title=label("",13,0xfff6f0e8,true);
+                holder.title.setSingleLine(true);
+                holder.title.setEllipsize(android.text.TextUtils.TruncateAt.END);
+                names.addView(holder.title,new LinearLayout.LayoutParams(-1,dp(28)));
+                holder.details=label("",11,0xffbbb4ae,false);
+                holder.details.setSingleLine(true);
+                holder.details.setEllipsize(android.text.TextUtils.TruncateAt.END);
+                names.addView(holder.details,new LinearLayout.LayoutParams(-1,dp(22)));
+                holder.nowPlayingBadge=label("▶ LIVE",10,accent,true);
+                holder.nowPlayingBadge.setGravity(Gravity.CENTER);
+                LinearLayout.LayoutParams nowLp=new LinearLayout.LayoutParams(dp(64),dp(34));
+                nowLp.leftMargin=dp(4);row.addView(holder.nowPlayingBadge,nowLp);
+                holder.favorite=button("♡");holder.favorite.setTextSize(19);
+                holder.favorite.setContentDescription("Toggle channel favorite");
+                row.addView(holder.favorite,new LinearLayout.LayoutParams(dp(43),dp(44)));
+                row.setTag(holder);
             }
-            Channel ch=filtered.get(pos);
-            texts.setText(ch.title+"\n"+ch.category+" · "+ch.region);
-            // Ensure tapping the title works even though the row includes a clickable favorite button.
-            texts.setOnClickListener(v->tune(ch));
-            row.setOnClickListener(v->tune(ch));
-            star.setText(store.isFavorite(ch)?"♥":"♡");star.setTextColor(store.isFavorite(ch)?accent:0xffd5d0ca);
-            star.setOnClickListener(v->{store.toggleFavorite(ch);refreshCollection();});
+            Channel channel=filtered.get(pos);
+            boolean current=playing!=null&&playing.key().equals(channel.key());
+            row.setBackground(bg(current?0xff403322:ROWS[store.theme()],7));
+            holder.title.setText(channel.title);
+            holder.details.setText(channel.category+"  ·  "+channel.region);
+            holder.nowPlayingBadge.setVisibility(current?View.VISIBLE:View.GONE);
+            holder.nowPlayingBadge.setTextColor(accent);
+            holder.title.setOnClickListener(v->selectBrowserChannel(channel));
+            holder.details.setOnClickListener(v->selectBrowserChannel(channel));
+            row.setOnClickListener(v->selectBrowserChannel(channel));
+            holder.favorite.setText(store.isFavorite(channel)?"♥":"♡");
+            holder.favorite.setTextColor(store.isFavorite(channel)?accent:0xffd6d0ca);
+            holder.favorite.setOnClickListener(v->{
+                store.toggleFavorite(channel);
+                refreshCollection();
+            });
             return row;
         }
     }
@@ -723,6 +919,7 @@ public final class MainActivity extends Activity {
                     String required=store.requiredVersion();
                     mandatoryUpdate=!required.isEmpty()
                         &&UpdateClient.compareVersions(required,VERSION)>0;
+                    if(mandatoryUpdate&&browserOpen)closeChannelBrowser(false);
                     if(mandatoryUpdate&&fullscreen)toggleFullscreen();
                     if(mandatoryUpdate&&playing!=null)stopPlaying();
                     if(result!=null){

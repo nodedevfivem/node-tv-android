@@ -1,4 +1,4 @@
-# NODE TV Android — v0.1.5
+# NODE TV Android — v0.1.6
 
 **Developed by NODE Development.** Free IPTV television player for Android phones (Android 8.0+).
 
@@ -34,7 +34,9 @@ Dedicated Android application, not a port of the Windows WPF binary. Source code
 
 The Android GitHub repository must match `UpdateClient.java` repository constants. GitHub APK file naming matters to the updater.
 
-v0.1.5 is a SOURCE-ONLY fix and has NOT been compiled or phone-tested in this environment. User reports v0.1.4 produces audio-only black video after exiting fullscreen; the v0.1.5 stable root-level video surface removes reparenting that can trigger this. Run GitHub Actions and test phone playback before publishing.
+**v0.1.6 is SOURCE ONLY; actual GitHub Actions compilation and device behavior have not yet been verified.** The v0.1.5 root-owned video surface is retained untouched. A floating translucent **Browse Channels** bottom sheet replaces the former cramped two-row portrait channel list. The channel browser now contains search, categories, region, favorites, recently watched, playing badge and a close / swipe-down option. No player reparenting or playback restart occurs on opening/closing the browser. See `START-HERE-v0.1.6-FLOATING-CHANNEL-BROWSER.md`.
+
+v0.1.5 history: attempted to correct a black video/audio-only issue after EXIT FULLSCREEN by keeping the video surface attached to the same root parent. User testing of that fix has NOT been confirmed.
 
 
 Latest v0.1.1: dual Media3/LibVLC playback compatibility and faster channel retries. See `START-HERE-v0.1.1-ANDROID-PLAYBACK.md`.
@@ -46,3 +48,6 @@ Latest **v0.1.3**: VLC automatic video-fit/centering and viewport synchronizatio
 Latest **v0.1.4**: persistent mandatory GitHub Release update gate and an on-screen EXIT FULLSCREEN button revealed by tapping landscape video; middle tap still pauses/resumes. The official signed APK is still `NODE-TV.apk`. See `START-HERE-v0.1.4-MANDATORY-UPDATES-EXIT-CONTROL.md` and `GITHUB-RELEASE-v0.1.4.txt`.
 
 Latest **v0.1.5**: critical portrait black-video/audio-only fix after fullscreen exit. `videoSlot` now stays under the root parent from app start to app shutdown; fullscreen/portrait only change bounds, rather than detaching VLC's TextureView. GitHub Actions now explicitly surfaces all **three official signed release assets as individually downloadable artifacts**, plus a release ZIP containing all three. Without permanent signing secrets, ONLY TEST APKs will be produced; this is intentional. See `START-HERE-v0.1.5-VIDEO-SURFACE-AND-ARTIFACT-FIX.md`.
+
+
+Latest **v0.1.6**: floating translucent channel browser, compact scrollable list, search, categories, region/favorites/recent filtering, LIVE highlight and dismiss controls. See `START-HERE-v0.1.6-FLOATING-CHANNEL-BROWSER.md`. This version is NOT Android-built or phone-tested here.
