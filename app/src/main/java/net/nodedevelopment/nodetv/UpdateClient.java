@@ -21,15 +21,16 @@ import java.util.Locale;
 /** GitHub release checker + verified APK handoff. No silent installs or hidden downloads. */
 public final class UpdateClient {
     public static final String OWNER="nodedevfivem";
-    public static final String REPO="NODE-TV-Android";
+    public static final String REPO="node-tv-android";
     private static final String API="https://api.github.com/repos/"+OWNER+"/"+REPO+"/releases/latest";
     private static final long MAX_APK=180L*1024*1024;
     public interface Progress {void progress(long complete,long total);}
     public static final class Release {
         public final String version,releasePage,apkUrl,shaUrl,shaDigest,apkName;
+        public final boolean mandatory;
         public final long size;
-        Release(String v,String page,String apk,String sha,String digest,String filename,long bytes){
-            version=v;releasePage=page;apkUrl=apk;shaUrl=sha;shaDigest=digest;apkName=filename;size=bytes;
+        Release(String v,String page,String apk,String sha,String digest,String filename,long bytes,boolean forced){
+            version=v;releasePage=page;apkUrl=apk;shaUrl=sha;shaDigest=digest;apkName=filename;size=bytes;mandatory=forced;
         }
     }
     private static String readSmall(String target,int limit) throws Exception {
@@ -48,7 +49,7 @@ public final class UpdateClient {
         HttpURLConnection c=(HttpURLConnection)new URL(target).openConnection();
         c.setInstanceFollowRedirects(true);c.setConnectTimeout(14000);c.setReadTimeout(24000);
         c.setRequestProperty("Accept","application/vnd.github+json");
-        c.setRequestProperty("User-Agent","NODE-TV-Android/0.1.0");
+        c.setRequestProperty("User-Agent","NODE-TV-Android/0.1.2");
         return c;
     }
     public static int compareVersions(String a,String b){
@@ -82,7 +83,12 @@ public final class UpdateClient {
         if(apk.isEmpty()||size<=0||size>MAX_APK||(checksum.isEmpty()&&!digest.startsWith("sha256:")))return null;
         String required="https://github.com/"+OWNER+"/"+REPO+"/releases/download/"+version+"/";
         if(!apk.startsWith(required)||(!checksum.isEmpty()&&!checksum.startsWith(required)))return null;
-        return new Release(version,release.optString("html_url"),apk,checksum,digest,filename,size);
+        // Publisher controls the update mode inside official GitHub Release notes.
+        // Add <!-- NODETV_UPDATE_MODE: MANDATORY --> for a required update;
+        // omit it to offer LATER on a normal update.
+        boolean mandatory=release.optString("body","")
+            .toUpperCase(Locale.ROOT).contains("NODETV_UPDATE_MODE: MANDATORY");
+        return new Release(version,release.optString("html_url"),apk,checksum,digest,filename,size,mandatory);
     }
     public static File downloadVerified(Context context,Release release,Progress p) throws Exception {
         String expected=release.shaDigest.startsWith("sha256:")?release.shaDigest.substring(7).trim().toLowerCase(Locale.ROOT):"";

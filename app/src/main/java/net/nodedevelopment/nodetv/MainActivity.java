@@ -4,6 +4,8 @@ import android.app.Activity;
 import android.content.ActivityNotFoundException;
 import android.content.Intent;
 import android.content.pm.ActivityInfo;
+import android.media.AudioManager;
+import android.provider.Settings;
 import android.graphics.Color;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
@@ -61,7 +63,7 @@ import java.util.concurrent.Executors;
 
 @OptIn(markerClass = UnstableApi.class)
 public final class MainActivity extends Activity {
-    private static final String VERSION="0.1.1";
+    private static final String VERSION="0.1.2";
     private static final String[] THEMES={"Vintage Amber","NODE Electric Blue","Nebula Violet","Forest Night","Crimson Theater","Graphite","Deep Teal","Copper Sunset"};
     private static final int[] ACCENTS={0xfff0ab4e,0xff42caff,0xffc29bff,0xff69c49a,0xffee7677,0xffb8c0d0,0xff4dd7cc,0xffdc884b};
     private static final int[] BACKGROUNDS={0xff101016,0xff0a1320,0xff14101f,0xff0d1915,0xff1c1014,0xff15161a,0xff0b191b,0xff211611};
@@ -69,6 +71,8 @@ public final class MainActivity extends Activity {
     private static final int[] ROWS={0xff24252e,0xff1d3044,0xff2b243e,0xff22392f,0xff37242b,0xff303239,0xff1d383a,0xff403028};
     private final Handler ui=new Handler(Looper.getMainLooper());
     private final ExecutorService io=Executors.newSingleThreadExecutor();
+    // Update metadata/download must not wait behind slow IPTV playlist requests.
+    private final ExecutorService updateIo=Executors.newSingleThreadExecutor();
     private final StaticAudio hiss=new StaticAudio();
     private UserStore store;
     private ExoPlayer player;
@@ -84,7 +88,16 @@ public final class MainActivity extends Activity {
     private TextView signalLabel,nowPlaying,statusText,countText,qualityText;
     private FrameLayout root,videoSlot,retroFrame,fullscreenLayer;
     private LinearLayout mainColumn,updateBanner;
-    private TextView updateTitle;
+    private TextView updateTitle,updateSubtitle;
+    private Button updateLaterButton;
+    private FrameLayout mandatoryOverlay;
+    private TextView mandatoryDescription,fullscreenIndicator;
+    private FullscreenGestureView gestureView;
+    private AudioManager audioManager;
+    private float gestureStartBrightness, originalWindowBrightness=-1f;
+    private int gestureStartMediaVolume, gestureMaxMediaVolume=1;
+    private final Runnable hideFullscreenIndicator=()->{if(fullscreenIndicator!=null)fullscreenIndicator.setVisibility(View.GONE);};
+    private boolean mandatoryUpdate,userPaused;
     private EditText search;
     private Spinner categorySpinner,themeSpinner;
     private ListView list;
@@ -118,12 +131,13 @@ public final class MainActivity extends Activity {
         ui.postDelayed(tuneTimeout,millis);
     }
     private final Runnable repeatUpdateChecks=new Runnable(){
-        @Override public void run(){checkUpdates(false);ui.postDelayed(this,6L*60*60*1000);}
+        @Override public void run(){checkUpdates(false);ui.postDelayed(this,30L*60*1000);}
     };
 
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);
         store=new UserStore(this);selectedRegion=store.lastRegion();mode=selectedRegion;accent=ACCENTS[store.theme()];
+        audioManager=(AudioManager)getSystemService(Context.AUDIO_SERVICE);
         getWindow().setStatusBarColor(0xff0c0d11);getWindow().setNavigationBarColor(0xff0c0d11);
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         networkFactory=new DefaultHttpDataSource.Factory()
@@ -143,10 +157,10 @@ public final class MainActivity extends Activity {
             @Override public void onPlaybackStateChanged(int state){
                 if(usingVlc||playing==null)return;
                 if(state==Player.STATE_BUFFERING){
-                    if(activeSignal) {activeSignal=false;scheduleTuneTimeout(12000,playGeneration,false);}
+                    if(activeSignal&&!userPaused) {activeSignal=false;scheduleTuneTimeout(12000,playGeneration,false);}
                     setStatus("Buffering: "+playing.title);
                 } else if(state==Player.STATE_READY&&player.getPlayWhenReady())onPlaybackSucceeded("Android",playGeneration);
-                else if(state==Player.STATE_ENDED)tryVlcFallback("Channel stream ended");
+                else if(state==Player.STATE_ENDED&&!userPaused)tryVlcFallback("Channel stream ended");
             }
             @Override public void onPlayerError(PlaybackException error){
                 if(playing!=null&&!usingVlc){
@@ -157,8 +171,8 @@ public final class MainActivity extends Activity {
             @Override public void onVideoSizeChanged(VideoSize v){qualityWidth=v.width;qualityHeight=v.height;quality();}
         });
         buildUi();loadRegion(selectedRegion==1);
-        ui.postDelayed(()->checkUpdates(false),3500);
-        ui.postDelayed(repeatUpdateChecks,6L*60*60*1000);
+        ui.postDelayed(()->checkUpdates(false),1500);
+        ui.postDelayed(repeatUpdateChecks,30L*60*1000);
     }
 
     private int dp(float p){return (int)(getResources().getDisplayMetrics().density*p+.5f);}
@@ -191,16 +205,21 @@ public final class MainActivity extends Activity {
         header.addView(logo,new LinearLayout.LayoutParams(dp(55),dp(55)));
         LinearLayout brand=vertical();LinearLayout.LayoutParams brandLp=new LinearLayout.LayoutParams(0,-2,1);brandLp.leftMargin=dp(6);header.addView(brand,brandLp);
         brand.addView(label("NODE TV",20,accent,true));brand.addView(label("NODE DEVELOPMENT  ·  ANDROID",9,0xffbeb8ab,false));
-        Button updates=button("↻ Updates");header.addView(updates,wrapButton());updates.setOnClickListener(v->checkUpdates(true));
-        updateBanner=vertical();updateBanner.setPadding(dp(12),dp(8),dp(12),dp(8));updateBanner.setBackgroundColor(0xff33291d);
-        mainColumn.addView(updateBanner,new LinearLayout.LayoutParams(-1,-2));updateBanner.setVisibility(View.GONE);
-        updateTitle=label("NEW UPDATE",14,accent,true);updateBanner.addView(updateTitle);
-        LinearLayout actionRow=horizontal();updateBanner.addView(actionRow);
-        Button now=goldButton("UPDATE NOW");actionRow.addView(now,wrapButton());now.setOnClickListener(v->downloadUpdate());
-        Button later=button("LATER");actionRow.addView(later,wrapButton());later.setOnClickListener(v->{store.snooze();updateBanner.setVisibility(View.GONE);});
-        Button details=button("DETAILS");actionRow.addView(details,wrapButton());details.setOnClickListener(v->{
-            if(availableRelease!=null)startActivity(new Intent(Intent.ACTION_VIEW,android.net.Uri.parse(availableRelease.releasePage)));
-        });
+        // The update banner is automatic: users no longer have to find a header button.
+        updateBanner=vertical();updateBanner.setPadding(dp(14),dp(9),dp(14),dp(10));
+        GradientDrawable updateSurface=bg(0xff392819,10);updateSurface.setStroke(dp(2),accent);
+        updateBanner.setBackground(updateSurface);
+        LinearLayout.LayoutParams bannerParams=new LinearLayout.LayoutParams(-1,-2);
+        bannerParams.setMargins(dp(8),dp(6),dp(8),dp(4));
+        mainColumn.addView(updateBanner,bannerParams);updateBanner.setVisibility(View.GONE);
+        updateTitle=label("📺  NEW UPDATE AVAILABLE",16,accent,true);updateBanner.addView(updateTitle);
+        updateSubtitle=label("A newer version of NODE TV is ready.",12,0xfff5e6d4,false);
+        updateBanner.addView(updateSubtitle);
+        LinearLayout actionRow=horizontal();actionRow.setPadding(0,dp(6),0,0);updateBanner.addView(actionRow);
+        Button now=goldButton("⬇ UPDATE NOW");actionRow.addView(now,wrapButton());now.setOnClickListener(v->downloadUpdate());
+        updateLaterButton=button("LATER");actionRow.addView(updateLaterButton,wrapButton());
+        updateLaterButton.setOnClickListener(v->{if(!mandatoryUpdate){store.snooze();updateBanner.setVisibility(View.GONE);}});
+        Button details=button("DETAILS");actionRow.addView(details,wrapButton());details.setOnClickListener(v->showReleaseDetails());
 
         LinearLayout screenHeader=horizontal();screenHeader.setPadding(dp(12),dp(7),dp(12),dp(5));mainColumn.addView(screenHeader,new LinearLayout.LayoutParams(-1,-2));
         LinearLayout names=vertical();screenHeader.addView(names,new LinearLayout.LayoutParams(0,-2,1));
@@ -236,12 +255,7 @@ public final class MainActivity extends Activity {
         wood.setClickable(false);
         LinearLayout controls=horizontal();controls.setPadding(dp(10),dp(4),dp(10),dp(5));controls.setBackgroundColor(PANELS[store.theme()]);
         mainColumn.addView(controls,new LinearLayout.LayoutParams(-1,dp(48)));
-        Button play=goldButton("▶ / ❚❚");controls.addView(play,wrapButton());play.setOnClickListener(v->{
-            if(playing!=null){
-                if(usingVlc)vlc.setPaused(!vlc.isPlaying());
-                else player.setPlayWhenReady(!player.getPlayWhenReady());
-            }
-        });
+        Button play=goldButton("▶ / ❚❚");controls.addView(play,wrapButton());play.setOnClickListener(v->togglePlaybackPause());
         Button stop=button("■");controls.addView(stop,wrapButton());stop.setOnClickListener(v->stopPlaying());
         Button favorite=button("♡ Favorite");controls.addView(favorite,wrapButton());favorite.setOnClickListener(v->{if(playing!=null){store.toggleFavorite(playing);refreshCollection();toast(store.isFavorite(playing)?"Added to Favorite TV Channels":"Removed from favorites");}});
         Button mute=button("♬");controls.addView(mute,wrapButton());mute.setOnClickListener(v->{
@@ -301,9 +315,34 @@ public final class MainActivity extends Activity {
             }
             public void onNothingSelected(AdapterView<?> parent){}
         });
-        TextView version=label("v"+VERSION,10,0xffa29b93,false);footer.addView(version);
+        TextView version=label("v"+VERSION+" ↻",10,0xffa29b93,false);footer.addView(version);
+        version.setOnClickListener(v->checkUpdates(true)); // Optional manual refresh retained, moved out of header.
         fullscreenLayer=new FrameLayout(this);fullscreenLayer.setBackgroundColor(Color.BLACK);fullscreenLayer.setVisibility(View.GONE);
         root.addView(fullscreenLayer,new FrameLayout.LayoutParams(-1,-1));
+        gestureView=new FullscreenGestureView(this,new FullscreenGestureView.Listener(){
+            @Override public void onSwipeStart(boolean brightnessSide){
+                if(brightnessSide)gestureStartBrightness=currentScreenBrightness();
+                else if(audioManager!=null){
+                    gestureMaxMediaVolume=Math.max(1,audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC));
+                    gestureStartMediaVolume=audioManager.getStreamVolume(AudioManager.STREAM_MUSIC);
+                }
+            }
+            @Override public void onSwipe(boolean brightnessSide,float delta){
+                if(brightnessSide)adjustFullscreenBrightness(delta);
+                else adjustFullscreenVolume(delta);
+            }
+            @Override public void onCenterTap(){togglePlaybackPause();}
+        });
+        fullscreenLayer.addView(gestureView,new FrameLayout.LayoutParams(-1,-1));
+        fullscreenIndicator=label("",19,Color.WHITE,true);
+        fullscreenIndicator.setGravity(Gravity.CENTER);
+        fullscreenIndicator.setPadding(dp(24),dp(14),dp(24),dp(14));
+        fullscreenIndicator.setBackground(bg(0xcc1e1d20,15));
+        fullscreenIndicator.setClickable(false); // Double tap remains available while HUD is visible.
+        fullscreenIndicator.setVisibility(View.GONE);
+        FrameLayout.LayoutParams indicatorParams=new FrameLayout.LayoutParams(-2,-2,Gravity.CENTER);
+        fullscreenLayer.addView(fullscreenIndicator,indicatorParams);
+        createMandatoryOverlay();
         // Start with a real channel catalog, then show whatever is available.
         populateCategories();
     }
@@ -362,7 +401,7 @@ public final class MainActivity extends Activity {
         // Stopping old playback before preparing the new channel avoids stale audio/video.
         long generation=++playGeneration;
         cancelTuneTimeout();
-        usingVlc=false;activeSignal=false;
+        usingVlc=false;activeSignal=false;userPaused=false;
         playing=channel;
         qualityWidth=0;qualityHeight=0;
         nowPlaying.setText(channel.title);
@@ -415,7 +454,7 @@ public final class MainActivity extends Activity {
         }
     }
     private void onPlaybackSucceeded(String engine,long generation){
-        if(playing==null||generation!=playGeneration)return;
+        if(playing==null||generation!=playGeneration||userPaused)return;
         activeSignal=true;cancelTuneTimeout();stopNoise();
         store.watched(playing);
         setStatus("● LIVE ("+engine+") — "+playing.title);
@@ -423,7 +462,7 @@ public final class MainActivity extends Activity {
         if(usingVlc&&qualityWidth==0)qualityText.setText("LIVE • VLC");
     }
     private void stopPlaying(){
-        ++playGeneration;cancelTuneTimeout();usingVlc=false;activeSignal=false;
+        ++playGeneration;cancelTuneTimeout();usingVlc=false;activeSignal=false;userPaused=false;
         player.stop();player.clearMediaItems();vlc.stop();vlc.view().setVisibility(View.GONE);
         playerView.setVisibility(View.VISIBLE);
         playing=null;stopNoise();qualityWidth=0;qualityHeight=0;
@@ -450,30 +489,94 @@ public final class MainActivity extends Activity {
     private void toast(String s){Toast.makeText(this,s,Toast.LENGTH_SHORT).show();}
     private void hideKeyboard(){((InputMethodManager)getSystemService(Context.INPUT_METHOD_SERVICE)).hideSoftInputFromWindow(search.getWindowToken(),0);search.clearFocus();}
 
+    private void togglePlaybackPause(){
+        if(playing==null)return;
+        if(!activeSignal){
+            if(fullscreen)showFullscreenIndicator("⌛ Connecting to channel…");
+            return;
+        }
+        userPaused=!userPaused;
+        if(userPaused){
+            cancelTuneTimeout();
+            if(usingVlc)vlc.setPaused(true);
+            else player.setPlayWhenReady(false);
+            setStatus("❚❚ PAUSED — "+playing.title);
+            if(fullscreen)showFullscreenIndicator("❚❚  PAUSED");
+        }else{
+            if(usingVlc)vlc.setPaused(false);
+            else player.setPlayWhenReady(true);
+            setStatus("▶ RESUMING — "+playing.title);
+            if(fullscreen)showFullscreenIndicator("▶  PLAYING");
+            // Live channels may resume at the live edge instead of a paused frame.
+        }
+    }
+    private float currentScreenBrightness(){
+        float existing=getWindow().getAttributes().screenBrightness;
+        if(existing>=0f)return existing;
+        try{return Math.max(.02f,Settings.System.getInt(getContentResolver(),Settings.System.SCREEN_BRIGHTNESS)/255f);}
+        catch(Exception ex){return .5f;}
+    }
+    private void adjustFullscreenBrightness(float delta){
+        float brightness=Math.max(.02f,Math.min(1f,gestureStartBrightness+delta));
+        WindowManager.LayoutParams params=getWindow().getAttributes();
+        params.screenBrightness=brightness;
+        getWindow().setAttributes(params);
+        showFullscreenIndicator("☀  Brightness  "+Math.round(brightness*100)+"%");
+    }
+    private void adjustFullscreenVolume(float delta){
+        if(audioManager==null)return;
+        int desired=Math.max(0,Math.min(gestureMaxMediaVolume,
+            Math.round(gestureStartMediaVolume+delta*gestureMaxMediaVolume)));
+        try{
+            if(audioManager.getStreamVolume(AudioManager.STREAM_MUSIC)!=desired)
+                audioManager.setStreamVolume(AudioManager.STREAM_MUSIC,desired,0);
+            showFullscreenIndicator("♫  Media volume  "+Math.round(100f*desired/gestureMaxMediaVolume)+"%");
+        }catch(SecurityException ex){showFullscreenIndicator("Volume controlled by device settings");}
+    }
+    private void showFullscreenIndicator(String content){
+        if(!fullscreen||fullscreenIndicator==null)return;
+        fullscreenIndicator.setText(content);
+        fullscreenIndicator.setVisibility(View.VISIBLE);
+        ui.removeCallbacks(hideFullscreenIndicator);
+        ui.postDelayed(hideFullscreenIndicator,1000);
+    }
     private void toggleFullscreen(){
         if(!fullscreen){
+            if(mandatoryUpdate)return;
             fullscreen=true;
+            originalWindowBrightness=getWindow().getAttributes().screenBrightness;
             if(usingVlc)vlc.beforeMove();
             retroFrame.removeView(videoSlot);
-            fullscreenLayer.addView(videoSlot,new FrameLayout.LayoutParams(-1,-1));
+            fullscreenLayer.addView(videoSlot,0,new FrameLayout.LayoutParams(-1,-1));
             fullscreenLayer.setVisibility(View.VISIBLE);mainColumn.setVisibility(View.GONE);
             setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE);
-            getWindow().getDecorView().setSystemUiVisibility(5894|View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN|View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION);
-            fullscreenLayer.setOnClickListener(v->toggleFullscreen());root.requestApplyInsets();
+            getWindow().getDecorView().setSystemUiVisibility(
+                View.SYSTEM_UI_FLAG_FULLSCREEN|View.SYSTEM_UI_FLAG_HIDE_NAVIGATION|
+                View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY|View.SYSTEM_UI_FLAG_LAYOUT_STABLE|
+                View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN|View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION);
+            root.requestApplyInsets();
             if(usingVlc)videoSlot.post(()->vlc.afterMove());
         }else{
             fullscreen=false;
+            ui.removeCallbacks(hideFullscreenIndicator);
+            fullscreenIndicator.setVisibility(View.GONE);
+            WindowManager.LayoutParams windowParams=getWindow().getAttributes();
+            windowParams.screenBrightness=originalWindowBrightness;
+            getWindow().setAttributes(windowParams);
             if(usingVlc)vlc.beforeMove();
             fullscreenLayer.removeView(videoSlot);
             retroFrame.addView(videoSlot,0,new FrameLayout.LayoutParams(dp(200),dp(160)));
             fullscreenLayer.setVisibility(View.GONE);mainColumn.setVisibility(View.VISIBLE);
             getWindow().getDecorView().setSystemUiVisibility(0);
-            setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED);
+            setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_PORTRAIT);
             retroFrame.post(()->positionSlot(retroFrame.getWidth(),retroFrame.getHeight()));root.requestApplyInsets();
             if(usingVlc)videoSlot.post(()->vlc.afterMove());
         }
     }
-    @Override public void onBackPressed(){if(fullscreen)toggleFullscreen();else super.onBackPressed();}
+    @Override public void onBackPressed(){if(fullscreen)toggleFullscreen();else if(mandatoryUpdate){
+        // Android Back cannot bypass a confirmed mandatory update while app is open.
+        toast("NODE TV requires an update to continue.");
+    }else super.onBackPressed();}
 
     private final class ChannelAdapter extends BaseAdapter {
         @Override public int getCount(){return filtered.size();}
@@ -501,32 +604,92 @@ public final class MainActivity extends Activity {
 
     private void checkUpdates(boolean manual){
         long now=System.currentTimeMillis();
-        if(!manual&&now-lastUpdateCheck<30L*60*1000)return;
+        if(!manual&&now-lastUpdateCheck<10L*60*1000)return;
         lastUpdateCheck=now;
-        io.execute(()->{
+        updateIo.execute(()->{
             try{
                 UpdateClient.Release result=UpdateClient.check(VERSION);
                 ui.post(()->{
                     availableRelease=result;
-                    if(result!=null&&System.currentTimeMillis()>store.snoozeUntil()){
-                        updateTitle.setText("NEW UPDATE — "+result.version+" AVAILABLE");
-                        updateBanner.setVisibility(View.VISIBLE);
-                    } else if(manual)toast(result==null?"NODE TV is up to date":"Update postponed. Use Updates to check again.");
+                    mandatoryUpdate=result!=null&&result.mandatory;
+                    if(mandatoryUpdate&&fullscreen)toggleFullscreen();
+                    if(mandatoryUpdate&&playing!=null)stopPlaying(); // Block streaming while an update is required.
+                    if(result!=null){
+                        updateTitle.setText(mandatoryUpdate?"⚠  UPDATE REQUIRED — "+result.version:"📺  NEW UPDATE AVAILABLE — "+result.version);
+                        updateSubtitle.setText(mandatoryUpdate
+                            ?"Please update NODE TV to continue watching."
+                            :"A newer NODE TV version is available from GitHub.");
+                        updateLaterButton.setVisibility(mandatoryUpdate?View.GONE:View.VISIBLE);
+                        updateBanner.setVisibility(mandatoryUpdate||System.currentTimeMillis()>store.snoozeUntil()
+                            ?View.VISIBLE:View.GONE);
+                        mandatoryDescription.setText("NODE TV "+result.version+" is required to continue. "
+                            +"Download the verified official APK from GitHub and approve Android's installation prompt.");
+                    }else{
+                        updateBanner.setVisibility(View.GONE);
+                    }
+                    mandatoryOverlay.setVisibility(mandatoryUpdate?View.VISIBLE:View.GONE);
+                    if(manual)toast(result==null?"NODE TV is up to date":
+                        (mandatoryUpdate?"Update required: "+result.version:"Latest version: "+result.version));
                 });
-            }catch(Exception ex){if(manual)ui.post(()->toast("Update check unavailable. Check GitHub or your connection."));}
+            }catch(Exception ex){
+                // Network failure is NOT a reason to invent a required version or lock offline viewers.
+                if(manual)ui.post(()->toast("Update check unavailable. Check GitHub or your connection."));
+            }
         });
+    }
+    private void showReleaseDetails(){
+        if(availableRelease==null)return;
+        try{startActivity(new Intent(Intent.ACTION_VIEW,Uri.parse(availableRelease.releasePage)));}
+        catch(ActivityNotFoundException ex){toast("No browser found to display release details.");}
+    }
+    private void createMandatoryOverlay(){
+        mandatoryOverlay=new FrameLayout(this);
+        mandatoryOverlay.setBackgroundColor(0xf5111118);
+        mandatoryOverlay.setVisibility(View.GONE);
+        root.addView(mandatoryOverlay,new FrameLayout.LayoutParams(-1,-1));
+        LinearLayout card=vertical();card.setPadding(dp(20),dp(22),dp(20),dp(20));
+        GradientDrawable surface=bg(0xff35261e,16);surface.setStroke(dp(2),0xffffb851);
+        card.setBackground(surface);
+        FrameLayout.LayoutParams params=new FrameLayout.LayoutParams(-1,-2,Gravity.TOP);
+        params.setMargins(dp(15),dp(38),dp(15),0);
+        mandatoryOverlay.addView(card,params);
+        TextView title=label("⚠  NODE TV — UPDATE REQUIRED",20,0xffffc573,true);
+        card.addView(title);
+        mandatoryDescription=label("A newer NODE TV release must be installed before watching.",14,Color.WHITE,false);
+        mandatoryDescription.setPadding(0,dp(10),0,dp(16));card.addView(mandatoryDescription);
+        LinearLayout actions=horizontal();card.addView(actions);
+        Button update=goldButton("⬇ UPDATE NOW");update.setBackground(bg(0xffffb851,8));actions.addView(update,wrapButton());
+        update.setOnClickListener(v->downloadUpdate());
+        Button details=button("DETAILS");actions.addView(details,wrapButton());
+        details.setOnClickListener(v->showReleaseDetails());
+        TextView info=label("Installation requires your confirmation in Android. No silent installs.",11,0xffdbc8b3,false);
+        info.setPadding(0,dp(14),0,0);card.addView(info);
     }
     private void downloadUpdate(){
         if(availableRelease==null||downloading)return;
         downloading=true;updateTitle.setText("DOWNLOADING VERIFIED UPDATE…");
+        if(mandatoryUpdate)mandatoryDescription.setText("Downloading verified update from GitHub…");
         UpdateClient.Release release=availableRelease;
-        io.execute(()->{
+        updateIo.execute(()->{
             try{
                 File file=UpdateClient.downloadVerified(getApplicationContext(),release,(done,total)->{
-                    ui.post(()->updateTitle.setText("UPDATE "+release.version+" — "+Math.min(100,(done*100/Math.max(1,total)))+"%"));
+                    ui.post(()->{
+                        int pct=(int)Math.min(100,(done*100/Math.max(1,total)));
+                        updateTitle.setText("UPDATE "+release.version+" — "+pct+"%");
+                        if(mandatoryUpdate)mandatoryDescription.setText("Downloading verified APK… "+pct+"%  —  Keep NODE TV open.");
+                    });
                 });
-                ui.post(()->{downloading=false;downloadedUpdate=file;startInstallerIfAllowed();});
-            }catch(Exception ex){ui.post(()->{downloading=false;updateTitle.setText("UPDATE FAILED — TRY AGAIN");toast("Update verification/download failed: "+ex.getMessage());});}
+                ui.post(()->{
+                    downloading=false;downloadedUpdate=file;
+                    if(mandatoryUpdate)mandatoryDescription.setText("Download verified. Approve Android's installation request to complete the update.");
+                    startInstallerIfAllowed();
+                });
+            }catch(Exception ex){ui.post(()->{
+                downloading=false;updateTitle.setText("UPDATE FAILED — TRY AGAIN");
+                if(mandatoryUpdate)mandatoryDescription.setText("Download failed. Check internet, then tap UPDATE NOW to retry. "
+                    +ex.getMessage());
+                toast("Update verification/download failed: "+ex.getMessage());
+            });}
         });
     }
     private void startInstallerIfAllowed(){
@@ -538,11 +701,22 @@ public final class MainActivity extends Activity {
         }
         try{UpdateClient.install(this,downloadedUpdate);}catch(ActivityNotFoundException ex){toast("No APK installer found on this device.");}
     }
-    @Override protected void onResume(){super.onResume();if(awaitingInstallPermission&&downloadedUpdate!=null){awaitingInstallPermission=false;if(UpdateClient.canInstall(this))startInstallerIfAllowed();}}
+    @Override protected void onResume(){
+        super.onResume();
+        if(store!=null)checkUpdates(false);
+        if(awaitingInstallPermission&&downloadedUpdate!=null){
+            awaitingInstallPermission=false;
+            if(UpdateClient.canInstall(this))startInstallerIfAllowed();
+        }
+    }
     @Override protected void onDestroy(){
         ui.removeCallbacksAndMessages(null);hiss.stop();
+        if(fullscreen){
+            WindowManager.LayoutParams w=getWindow().getAttributes();
+            w.screenBrightness=originalWindowBrightness;getWindow().setAttributes(w);
+        }
         if(vlc!=null)vlc.release();
         if(player!=null){playerView.setPlayer(null);player.release();}
-        io.shutdownNow();super.onDestroy();
+        io.shutdownNow();updateIo.shutdownNow();super.onDestroy();
     }
 }

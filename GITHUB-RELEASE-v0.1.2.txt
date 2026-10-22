@@ -1,0 +1,60 @@
+TAG:
+v0.1.2
+
+RELEASE TITLE:
+NODE TV Android v0.1.2 — Fullscreen Gestures & Mandatory Updates
+
+GITHUB RELEASE DESCRIPTION (copy ONLY the text between START and END):
+====== START DESCRIPTION ======
+# NODE TV Android v0.1.2 📺
+
+**NODE Development | Fullscreen Gestures & Mandatory Updates**
+
+This update introduces more natural landscape video controls and an automatic, prominent portrait-mode GitHub update notice while preserving the retro NODE TV experience.
+
+### ✨ New: Fullscreen touch gestures
+- 🔆 Swipe **up / down on the left half** of fullscreen to raise / lower playback-screen brightness. This setting is local to NODE TV and restored when you leave fullscreen.
+- 🔊 Swipe **up / down on the right half** to change the device's media volume.
+- ⏸️ Tap the **center** of the video to pause; tap again to play. Pausing no longer causes fullscreen to close.
+- ↩️ Use your Android phone's built-in Back button or system Back gesture to return to the portrait interface without losing your channel.
+- Small temporary on-screen indicators show volume, brightness, and pause/play state.
+
+### 🚀 New: Automatic GitHub update notifications
+- Prominent **NEW UPDATE AVAILABLE** banner near the top of the portrait interface.
+- Optional updates show **UPDATE NOW**, **LATER**, and **DETAILS**.
+- A release can be marked **mandatory** to display **UPDATE REQUIRED** and prevent using outdated NODE TV versions until an update is installed.
+- Updates are delivered through official GitHub Releases with a size + SHA-256 check; Android always asks for installation approval.
+- Manual checks remain available by tapping the version text in the app footer.
+
+### 📡 Playback and existing features preserved
+- Media3 ExoPlayer remains the primary player, with **VideoLAN LibVLC fallback** for compatible channels that fail in ExoPlayer.
+- Worldwide & Philippines live television, channel search/categories, favorites, recently watched, eight themes, retro television and CRT noise, and saved preferences remain included.
+- Live streams may resume at the live edge after a pause, depending on the source. Some offline, geoblocked or DRM-protected channels may not play on Android.
+
+### 📱 Android requirements
+- Android 8.0 or newer.
+- App package: `net.nodedevelopment.nodetv`
+- Version: **0.1.2** | Version code: **3**
+
+### ⬇️ Official installation files
+- `NODE-TV-Android-v0.1.2.apk`
+- `NODE-TV-Android-v0.1.2-SHA256.txt`
+
+**Important:** Publish these only after GitHub Actions successfully builds a **release-signed** APK using the existing permanent signing certificate. Debug APKs are not official update releases. Android requires your approval to install updates.
+
+Developed by **NODE Development**. Free to use.
+
+<!-- NODETV_UPDATE_MODE: MANDATORY -->
+====== END DESCRIPTION ======
+
+NOTE: The hidden HTML comment is intentionally in the published release description.
+It is the mandatory-update flag read by NODE TV Android v0.1.2+ for FUTURE newer releases.
+Clients running the old v0.1.1 code do not understand mandatory mode and cannot be retroactively locked.
+
+UPLOAD TO GITHUB RELEASE (official release only):
+1) NODE-TV-Android-v0.1.2.apk
+2) NODE-TV-Android-v0.1.2-SHA256.txt
+
+DO NOT UPLOAD:
+- NODE-TV-Android-v0.1.2-DEBUG-TEST-ONLY.apk (not an official release)
+- Any .jks or .keystore or signing passwords / secrets

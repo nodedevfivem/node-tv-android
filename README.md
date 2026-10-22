@@ -1,4 +1,4 @@
-# NODE TV Android — v0.1.1
+# NODE TV Android — v0.1.2
 
 **Developed by NODE Development.** Free IPTV television player for Android phones (Android 8.0+).
 
@@ -11,13 +11,13 @@ Dedicated Android application, not a port of the Windows WPF binary. Source code
 - Search, category filter, saved **Favorite TV Channels**, 30 recently watched, last successful channel.
 - Basic playback controls, volume/mute, current video dimensions, visual black-and-white CRT noise and optional low-volume hiss on stream errors / timeout.
 - Eight named color preferences; accent swatch on restart.
-- GitHub Release update checks at launch and every six hours; **NEW UPDATE – UPDATE NOW / LATER** banner.
+- GitHub Release update checks at launch, on foreground and periodically; prominent portrait **NEW UPDATE AVAILABLE** banner and release-controlled mandatory-update gate.
 - Verified APK download (SHA-256, size) and user-approved Android package installer handoff.
 - No account, monthly hosting, background analytics or custom streaming server.
 
-## Important limits of the first Android build
+## Important limits and compatibility
 
-- Android video engine is **Media3**, not Windows' LibVLC: not all codecs or transport protocols work. HLS is supported; geo-blocked and dead streams can still fail.
+- Android uses **Media3 ExoPlayer first**, then **VideoLAN LibVLC fallback**; not all codecs or transport protocols work. HLS is supported; geo-blocked and dead streams can still fail.
 - Program guide (EPG) and remote channel logos are **future Android work**; initial focus is stable basic TV playback and updating.
 - Android never silently installs APKs. The user must approve installation and may need to allow installs from NODE TV.
 - App updates require **a stable release signing key** and an incremented versionCode on each release; temporary Actions debug APKs cannot update one another reliably.
@@ -38,3 +38,5 @@ Not compiled or tested on Android in the originating environment. Use GitHub Act
 
 
 Latest v0.1.1: dual Media3/LibVLC playback compatibility and faster channel retries. See `START-HERE-v0.1.1-ANDROID-PLAYBACK.md`.
+
+Latest **v0.1.2**: fullscreen left brightness/right media-volume vertical swipes, center tap pause/play, native system Back to portrait, and GitHub Release banner/mandatory update marker. See `START-HERE-v0.1.2-FULLSCREEN-GESTURES-AND-GITHUB-UPDATES.md`. This source has NOT yet been compiled or device-tested; build in GitHub Actions before official release.
