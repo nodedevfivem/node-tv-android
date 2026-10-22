@@ -9,7 +9,8 @@ public final class FullscreenGestureView extends View {
     public interface Listener {
         void onSwipeStart(boolean brightnessSide);
         void onSwipe(boolean brightnessSide, float delta);
-        void onCenterTap();
+        /** A single short tap reveals the on-screen EXIT control; center taps also toggle playback. */
+        void onTap(boolean center);
     }
     private static final int UNDECIDED=0, VERTICAL=1, OTHER=2;
     private final Listener listener;
@@ -51,10 +52,10 @@ public final class FullscreenGestureView extends View {
             case MotionEvent.ACTION_UP:
                 if(gesture==UNDECIDED){
                     float x=event.getX(),y=event.getY();
-                    if(Math.abs(x-downX)<threshold&&Math.abs(y-downY)<threshold
-                        &&x>=getWidth()*.25f&&x<=getWidth()*.75f
-                        &&y>=getHeight()*.20f&&y<=getHeight()*.80f){
-                        listener.onCenterTap();
+                    if(Math.abs(x-downX)<threshold&&Math.abs(y-downY)<threshold){
+                        boolean center=x>=getWidth()*.25f&&x<=getWidth()*.75f
+                            &&y>=getHeight()*.20f&&y<=getHeight()*.80f;
+                        listener.onTap(center);
                     }
                 }
                 performClick();

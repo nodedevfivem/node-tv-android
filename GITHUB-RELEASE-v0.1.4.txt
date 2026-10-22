@@ -1,0 +1,49 @@
+# 📺 NODE TV Android v0.1.4 — Mandatory GitHub Updates & On-Screen Fullscreen Exit
+
+**NODE Development**
+
+NODE TV Android v0.1.4 improves the GitHub-managed mandatory update flow and adds an easy-to-use on-screen exit button during fullscreen viewing.
+
+## 🚀 Mandatory GitHub release updates
+- The app checks the newest published, non-prerelease GitHub Release at startup, on return to the app, and periodically while open.
+- When a valid newer official release is found, NODE TV shows a noticeable UPDATE REQUIRED banner and blocking update screen in portrait mode.
+- Users cannot continue watching until they update when the newer release requires updating.
+- Mandatory mode is the default for newly published official releases in v0.1.4 and newer. Older NODE TV app versions still need the explicit mandatory marker below.
+- The last detected mandatory version is saved, so the requirement persists after restarting the app and during temporary network failures.
+- UPDATE NOW downloads the official signed APK, verifies its SHA-256 digest and size, then opens Android's normal installer for user approval.
+- DETAILS opens the GitHub Release page. An unavailable network or unavailable release is never interpreted as a brand-new update requirement.
+- App installation is **never silent**; Android requires the user's authorization. Updates must preserve the official application package and permanent signing certificate.
+
+## 📺 Exit fullscreen button
+- Tap anywhere on fullscreen video to reveal **✕ EXIT FULLSCREEN** at the top-right for four seconds.
+- Press the button to return to the NODE TV portrait interface while keeping the selected channel.
+- Existing *center tap to pause/resume* still works; it also reveals the exit button.
+- Existing *left brightness* and *right media-volume* vertical swipes remain unchanged.
+- Normal Android Back also works as a fallback, but is no longer required to exit fullscreen.
+
+## 🎬 Playback preserved
+- Existing channel directories and search, favorite channels, recent history, themes and CRT effects.
+- Media3 ExoPlayer primary engine, VideoLAN LibVLC fallback.
+- v0.1.3 viewport and video fit fixes retained.
+
+## 🔢 Version / package
+- VersionName: `0.1.4`
+- VersionCode: `5`
+- Package: `net.nodedevelopment.nodetv`
+- Minimum Android: Android 8.0
+
+## 📦 GitHub Release attachments — upload all 3
+
+1. `NODE-TV.apk` — official consumer installer (release-signed)
+2. `NODE-TV-Android-v0.1.4.apk` — byte-identical signed compatibility copy for older updaters
+3. `NODE-TV-Android-v0.1.4-SHA256.txt` — SHA-256 checksums for both filenames
+
+**The release must be created as a PUBLISHED, NON-PRERELEASE GitHub Release, set as latest, with tag `v0.1.4`.**
+
+## ❗ Read before publishing
+- Do not attach `NODE-TV-TEST-ONLY.apk` to an official GitHub Release.
+- Preserve the same permanent Android signing certificate across all official releases.
+- v0.1.4 source is prepared, but Android/Gradle compile and phone behavior have not been verified in this environment.
+- Test channel playback, fullscreen controls, video resizing, detection from an older installed official build, verified APK download and install before public release.
+
+<!-- NODETV_UPDATE_MODE: MANDATORY -->

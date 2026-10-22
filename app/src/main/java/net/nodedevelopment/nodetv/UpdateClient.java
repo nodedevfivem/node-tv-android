@@ -49,7 +49,7 @@ public final class UpdateClient {
         HttpURLConnection c=(HttpURLConnection)new URL(target).openConnection();
         c.setInstanceFollowRedirects(true);c.setConnectTimeout(14000);c.setReadTimeout(24000);
         c.setRequestProperty("Accept","application/vnd.github+json");
-        c.setRequestProperty("User-Agent","NODE-TV-Android/0.1.3");
+        c.setRequestProperty("User-Agent","NODE-TV-Android/0.1.4");
         return c;
     }
     public static int compareVersions(String a,String b){
@@ -94,11 +94,14 @@ public final class UpdateClient {
         if(apk.isEmpty()||size<=0||size>MAX_APK||(checksum.isEmpty()&&!digest.startsWith("sha256:")))return null;
         String required="https://github.com/"+OWNER+"/"+REPO+"/releases/download/"+version+"/";
         if(!apk.startsWith(required)||(!checksum.isEmpty()&&!checksum.startsWith(required)))return null;
-        // Publisher controls the update mode inside official GitHub Release notes.
-        // Add <!-- NODETV_UPDATE_MODE: MANDATORY --> for a required update;
-        // omit it to offer LATER on a normal update.
-        boolean mandatory=release.optString("body","")
-            .toUpperCase(Locale.ROOT).contains("NODETV_UPDATE_MODE: MANDATORY");
+        // New *official* NODE TV releases require updating by default.
+        // To explicitly allow an optional update, publish a release with:
+        // <!-- NODETV_UPDATE_MODE: OPTIONAL -->
+        // Older installed versions (v0.1.2/v0.1.3) recognize only an explicit
+        // MANDATORY marker, so keep that marker in all mandatory release notes.
+        String notes=release.optString("body", "").toUpperCase(Locale.ROOT);
+        boolean mandatory=!notes.contains("NODETV_UPDATE_MODE: OPTIONAL")
+            || notes.contains("NODETV_UPDATE_MODE: MANDATORY");
         return new Release(version,release.optString("html_url"),apk,checksum,digest,filename,size,mandatory);
     }
     public static File downloadVerified(Context context,Release release,Progress p) throws Exception {

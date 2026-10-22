@@ -63,7 +63,7 @@ import java.util.concurrent.Executors;
 
 @OptIn(markerClass = UnstableApi.class)
 public final class MainActivity extends Activity {
-    private static final String VERSION="0.1.3";
+    private static final String VERSION="0.1.4";
     private static final String[] THEMES={"Vintage Amber","NODE Electric Blue","Nebula Violet","Forest Night","Crimson Theater","Graphite","Deep Teal","Copper Sunset"};
     private static final int[] ACCENTS={0xfff0ab4e,0xff42caff,0xffc29bff,0xff69c49a,0xffee7677,0xffb8c0d0,0xff4dd7cc,0xffdc884b};
     private static final int[] BACKGROUNDS={0xff101016,0xff0a1320,0xff14101f,0xff0d1915,0xff1c1014,0xff15161a,0xff0b191b,0xff211611};
@@ -92,11 +92,15 @@ public final class MainActivity extends Activity {
     private Button updateLaterButton;
     private FrameLayout mandatoryOverlay;
     private TextView mandatoryDescription,fullscreenIndicator;
+    private Button fullscreenExitButton;
     private FullscreenGestureView gestureView;
     private AudioManager audioManager;
     private float gestureStartBrightness, originalWindowBrightness=-1f;
     private int gestureStartMediaVolume, gestureMaxMediaVolume=1;
     private final Runnable hideFullscreenIndicator=()->{if(fullscreenIndicator!=null)fullscreenIndicator.setVisibility(View.GONE);};
+    private final Runnable hideFullscreenExit=()->{
+        if(fullscreenExitButton!=null)fullscreenExitButton.setVisibility(View.GONE);
+    };
     private boolean mandatoryUpdate,userPaused;
     private EditText search;
     private Spinner categorySpinner,themeSpinner;
@@ -170,7 +174,9 @@ public final class MainActivity extends Activity {
             }
             @Override public void onVideoSizeChanged(VideoSize v){qualityWidth=v.width;qualityHeight=v.height;quality();}
         });
-        buildUi();loadRegion(selectedRegion==1);
+        buildUi();
+        restoreRequiredUpdateGate();
+        loadRegion(selectedRegion==1);
         ui.postDelayed(()->checkUpdates(false),1500);
         ui.postDelayed(repeatUpdateChecks,30L*60*1000);
     }
@@ -337,7 +343,12 @@ public final class MainActivity extends Activity {
                 if(brightnessSide)adjustFullscreenBrightness(delta);
                 else adjustFullscreenVolume(delta);
             }
-            @Override public void onCenterTap(){togglePlaybackPause();}
+            @Override public void onTap(boolean center){
+                // Center retains the established pause/play gesture. Tapping anywhere
+                // reveals EXIT FULLSCREEN; the button never steals volume/brightness swipes.
+                if(center)togglePlaybackPause();
+                showFullscreenExitButton();
+            }
         });
         fullscreenLayer.addView(gestureView,new FrameLayout.LayoutParams(-1,-1));
         fullscreenIndicator=label("",19,Color.WHITE,true);
@@ -348,6 +359,20 @@ public final class MainActivity extends Activity {
         fullscreenIndicator.setVisibility(View.GONE);
         FrameLayout.LayoutParams indicatorParams=new FrameLayout.LayoutParams(-2,-2,Gravity.CENTER);
         fullscreenLayer.addView(fullscreenIndicator,indicatorParams);
+        // Explicit exit is accessible without relying on the phone's navigation gestures.
+        fullscreenExitButton=button("✕  EXIT FULLSCREEN");
+        fullscreenExitButton.setTextSize(14);
+        fullscreenExitButton.setTextColor(Color.WHITE);
+        GradientDrawable exitSurface=bg(0xee25242d,12);
+        exitSurface.setStroke(dp(1),0xffffb851);
+        fullscreenExitButton.setBackground(exitSurface);
+        fullscreenExitButton.setElevation(dp(7));
+        fullscreenExitButton.setVisibility(View.GONE);
+        fullscreenExitButton.setContentDescription("Exit fullscreen and return to NODE TV portrait mode");
+        FrameLayout.LayoutParams exitParams=new FrameLayout.LayoutParams(-2,dp(48),Gravity.TOP|Gravity.END);
+        exitParams.setMargins(dp(18),dp(18),dp(18),0);
+        fullscreenLayer.addView(fullscreenExitButton,exitParams);
+        fullscreenExitButton.setOnClickListener(v->toggleFullscreen());
         createMandatoryOverlay();
         // Start with a real channel catalog, then show whatever is available.
         populateCategories();
@@ -546,6 +571,12 @@ public final class MainActivity extends Activity {
         ui.removeCallbacks(hideFullscreenIndicator);
         ui.postDelayed(hideFullscreenIndicator,1000);
     }
+    private void showFullscreenExitButton(){
+        if(!fullscreen||fullscreenExitButton==null)return;
+        fullscreenExitButton.setVisibility(View.VISIBLE);
+        ui.removeCallbacks(hideFullscreenExit);
+        ui.postDelayed(hideFullscreenExit,4000);
+    }
     private void toggleFullscreen(){
         if(!fullscreen){
             if(mandatoryUpdate)return;
@@ -567,6 +598,8 @@ public final class MainActivity extends Activity {
             });
         }else{
             fullscreen=false;
+            ui.removeCallbacks(hideFullscreenExit);
+            if(fullscreenExitButton!=null)fullscreenExitButton.setVisibility(View.GONE);
             ui.removeCallbacks(hideFullscreenIndicator);
             fullscreenIndicator.setVisibility(View.GONE);
             WindowManager.LayoutParams windowParams=getWindow().getAttributes();
@@ -614,6 +647,25 @@ public final class MainActivity extends Activity {
         }
     }
 
+    /** Apply the last verified publisher requirement before the network check finishes.
+     * Never invent a required update on the first launch without a verified GitHub Release.
+     */
+    private void restoreRequiredUpdateGate(){
+        String required=store.requiredVersion();
+        if(required.isEmpty())return;
+        if(UpdateClient.compareVersions(required, VERSION)<=0){
+            store.clearRequiredVersion();
+            return;
+        }
+        mandatoryUpdate=true;
+        updateTitle.setText("⚠  UPDATE REQUIRED — v"+required.replaceFirst("^[vV]", ""));
+        updateSubtitle.setText("Connect to GitHub to download the required NODE TV update.");
+        updateLaterButton.setVisibility(View.GONE);
+        updateBanner.setVisibility(View.VISIBLE);
+        mandatoryDescription.setText("NODE TV v"+required.replaceFirst("^[vV]", "")
+            +" is required. Checking the official GitHub release for a verified installer…");
+        mandatoryOverlay.setVisibility(View.VISIBLE);
+    }
     private void checkUpdates(boolean manual){
         long now=System.currentTimeMillis();
         if(!manual&&now-lastUpdateCheck<10L*60*1000)return;
@@ -623,35 +675,60 @@ public final class MainActivity extends Activity {
                 UpdateClient.Release result=UpdateClient.check(VERSION);
                 ui.post(()->{
                     availableRelease=result;
-                    mandatoryUpdate=result!=null&&result.mandatory;
+                    if(result!=null&&result.mandatory){
+                        String cached=store.requiredVersion();
+                        if(cached.isEmpty()||UpdateClient.compareVersions(result.version,cached)>0){
+                            store.setRequiredVersion(result.version);
+                        }
+                    }
+                    String required=store.requiredVersion();
+                    mandatoryUpdate=!required.isEmpty()
+                        &&UpdateClient.compareVersions(required,VERSION)>0;
                     if(mandatoryUpdate&&fullscreen)toggleFullscreen();
-                    if(mandatoryUpdate&&playing!=null)stopPlaying(); // Block streaming while an update is required.
+                    if(mandatoryUpdate&&playing!=null)stopPlaying();
                     if(result!=null){
-                        updateTitle.setText(mandatoryUpdate?"⚠  UPDATE REQUIRED — "+result.version:"📺  NEW UPDATE AVAILABLE — "+result.version);
+                        updateTitle.setText(mandatoryUpdate?"⚠  UPDATE REQUIRED — "+result.version
+                            :"📺  NEW UPDATE AVAILABLE — "+result.version);
                         updateSubtitle.setText(mandatoryUpdate
-                            ?"Please update NODE TV to continue watching."
+                            ?"Install the latest NODE TV to continue watching."
                             :"A newer NODE TV version is available from GitHub.");
                         updateLaterButton.setVisibility(mandatoryUpdate?View.GONE:View.VISIBLE);
                         updateBanner.setVisibility(mandatoryUpdate||System.currentTimeMillis()>store.snoozeUntil()
                             ?View.VISIBLE:View.GONE);
                         mandatoryDescription.setText("NODE TV "+result.version+" is required to continue. "
-                            +"Download the verified official APK from GitHub and approve Android's installation prompt.");
+                            +"Tap UPDATE NOW, then approve the official Android APK installation.");
+                    }else if(mandatoryUpdate){
+                        updateTitle.setText("⚠  UPDATE REQUIRED — "+required);
+                        updateSubtitle.setText("Official APK temporarily unavailable. Try again later.");
+                        updateBanner.setVisibility(View.VISIBLE);
+                        mandatoryDescription.setText("A previously verified required update ("+required
+                            +") is still needed, but a downloadable GitHub Release is currently unavailable. "
+                            +"Tap UPDATE NOW to retry or DETAILS to visit GitHub.");
                     }else{
                         updateBanner.setVisibility(View.GONE);
                     }
                     mandatoryOverlay.setVisibility(mandatoryUpdate?View.VISIBLE:View.GONE);
-                    if(manual)toast(result==null?"NODE TV is up to date":
+                    if(manual)toast(result==null?"No newer installable release on GitHub":
                         (mandatoryUpdate?"Update required: "+result.version:"Latest version: "+result.version));
                 });
             }catch(Exception ex){
-                // Network failure is NOT a reason to invent a required version or lock offline viewers.
-                if(manual)ui.post(()->toast("Update check unavailable. Check GitHub or your connection."));
+                // Retry on return-to-app instead of enforcing a stale 10-minute throttle.
+                lastUpdateCheck=0L;
+                ui.post(()->{
+                    if(mandatoryUpdate){
+                        mandatoryOverlay.setVisibility(View.VISIBLE);
+                        mandatoryDescription.setText("Cannot contact GitHub. Connect to the internet and "
+                            +"tap UPDATE NOW to retry; DETAILS opens official releases.");
+                    }
+                    if(manual)toast("Update check unavailable. Check GitHub or your connection.");
+                });
             }
         });
     }
     private void showReleaseDetails(){
-        if(availableRelease==null)return;
-        try{startActivity(new Intent(Intent.ACTION_VIEW,Uri.parse(availableRelease.releasePage)));}
+        String page=availableRelease!=null ? availableRelease.releasePage :
+            "https://github.com/nodedevfivem/node-tv-android/releases/latest";
+        try{startActivity(new Intent(Intent.ACTION_VIEW,Uri.parse(page)));}
         catch(ActivityNotFoundException ex){toast("No browser found to display release details.");}
     }
     private void createMandatoryOverlay(){
@@ -678,7 +755,12 @@ public final class MainActivity extends Activity {
         info.setPadding(0,dp(14),0,0);card.addView(info);
     }
     private void downloadUpdate(){
-        if(availableRelease==null||downloading)return;
+        if(downloading)return;
+        if(availableRelease==null){
+            toast("Checking for the official GitHub APK…");
+            checkUpdates(true);
+            return;
+        }
         downloading=true;updateTitle.setText("DOWNLOADING VERIFIED UPDATE…");
         if(mandatoryUpdate)mandatoryDescription.setText("Downloading verified update from GitHub…");
         UpdateClient.Release release=availableRelease;
@@ -711,7 +793,8 @@ public final class MainActivity extends Activity {
             toast("Allow NODE TV to install updates, then return to the app.");
             startActivity(UpdateClient.requestInstallPermission(this));return;
         }
-        try{UpdateClient.install(this,downloadedUpdate);}catch(ActivityNotFoundException ex){toast("No APK installer found on this device.");}
+        try{UpdateClient.install(this,downloadedUpdate);}
+        catch(ActivityNotFoundException|SecurityException ex){toast("Unable to open Android APK installer: "+ex.getMessage());}
     }
     @Override protected void onResume(){
         super.onResume();

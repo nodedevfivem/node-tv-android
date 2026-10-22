@@ -1,4 +1,4 @@
-# NODE TV Android — v0.1.3
+# NODE TV Android — v0.1.4
 
 **Developed by NODE Development.** Free IPTV television player for Android phones (Android 8.0+).
 
@@ -34,7 +34,7 @@ Dedicated Android application, not a port of the Windows WPF binary. Source code
 
 The Android GitHub repository must match `UpdateClient.java` repository constants. GitHub APK file naming matters to the updater.
 
-v0.1.3 is NOT compiled or phone-tested in this environment. v0.1.2 was shown running on a real phone, but VLC video-fit bugs were reported. Use GitHub Actions to compile v0.1.3 and test its geometry fix on the same phone.
+v0.1.4 has NOT been compiled or phone-tested in this environment. User-provided screenshots demonstrated that v0.1.2 ran on Android, but later v0.1.3 VLC video geometry fixes have not yet been phone-verified. Use GitHub Actions to compile, test playback and updater behavior before publishing an official release.
 
 
 Latest v0.1.1: dual Media3/LibVLC playback compatibility and faster channel retries. See `START-HERE-v0.1.1-ANDROID-PLAYBACK.md`.
@@ -42,3 +42,5 @@ Latest v0.1.1: dual Media3/LibVLC playback compatibility and faster channel retr
 Latest **v0.1.2**: fullscreen left brightness/right media-volume vertical swipes, center tap pause/play, native system Back to portrait, and GitHub Release banner/mandatory update marker. See `START-HERE-v0.1.2-FULLSCREEN-GESTURES-AND-GITHUB-UPDATES.md`. The user has since provided phone screenshots of v0.1.2 playing VLC channels, but with a resizing bug.
 
 Latest **v0.1.3**: VLC automatic video-fit/centering and viewport synchronization on portrait/fullscreen moves. Official signed installer is now **`NODE-TV.apk`**, with a versioned compatibility copy for older clients. See `START-HERE-v0.1.3-VIDEO-SCALING-AND-APK-NAMING.md`. The new fix still needs GitHub build + phone testing.
+
+Latest **v0.1.4**: persistent mandatory GitHub Release update gate and an on-screen EXIT FULLSCREEN button revealed by tapping landscape video; middle tap still pauses/resumes. The official signed APK is still `NODE-TV.apk`. See `START-HERE-v0.1.4-MANDATORY-UPDATES-EXIT-CONTROL.md` and `GITHUB-RELEASE-v0.1.4.txt`.

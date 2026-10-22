@@ -52,6 +52,15 @@ public final class UserStore {
     public void setTheme(int i){pref.edit().putInt("theme",i).apply();}
     public int lastRegion(){return pref.getInt("region",1);}
     public void setLastRegion(int value){pref.edit().putInt("region",value).apply();}
+    /** Last mandatory version successfully observed in a published GitHub Release.
+     * Keep the required-update gate across app restarts or temporary network outages.
+     * Once this installed app reaches that version, clear the requirement.
+     */
+    public String requiredVersion(){return pref.getString("required_version", "");}
+    public void setRequiredVersion(String version){
+        pref.edit().putString("required_version", version).apply();
+    }
+    public void clearRequiredVersion(){pref.edit().remove("required_version").apply();}
     public long snoozeUntil(){return pref.getLong("update_snooze_until",0L);}
     public void snooze(){pref.edit().putLong("update_snooze_until",System.currentTimeMillis()+24L*60*60*1000).apply();}
 }

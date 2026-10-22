@@ -1,3 +1,5 @@
+> **CURRENT SOURCE v0.1.4 (2026-10-22).** This old handoff records the original v0.1.1 source for provenance only. Current canonical source is v0.1.4 / versionCode 5 (derived from the complete v0.1.3 archive). See `START-HERE-v0.1.4-MANDATORY-UPDATES-EXIT-CONTROL.md` for latest GitHub mandatory-update flow, fullscreen exit button and honest unverified build status.
+
 > **CURRENT SOURCE v0.1.3** — This is the historical v0.1.1 handoff retained for provenance. The canonical source in this ZIP is v0.1.3 (versionCode 4), based on the user-tested v0.1.2 source. See `START-HERE-v0.1.3-VIDEO-SCALING-AND-APK-NAMING.md` for changes, official NODE-TV.apk naming, build/release instructions and unverified v0.1.3 status.
 
 > **HISTORICAL HANDOFF — v0.1.1 hotfix #2.** This document is retained unchanged in substance as provenance from the uploaded canonical v0.1.1 source. The CURRENT source in this ZIP is **v0.1.2**, based on that original v0.1.1. Read `START-HERE-v0.1.2-FULLSCREEN-GESTURES-AND-GITHUB-UPDATES.md` for current code changes, release details and build/test status.
