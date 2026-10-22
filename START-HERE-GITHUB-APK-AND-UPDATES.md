@@ -1,3 +1,5 @@
+> **v0.1.3 CURRENT APK NAMING:** Official signed installer is `NODE-TV.apk`, plus identical `NODE-TV-Android-v0.1.3.apk` for v0.1.2 client compatibility and `NODE-TV-Android-v0.1.3-SHA256.txt` for both checksums. Old naming below is historical; see `START-HERE-v0.1.3-VIDEO-SCALING-AND-APK-NAMING.md`. Do not publish `NODE-TV-TEST-ONLY.apk`.
+
 # NODE TV Android v0.1.0 — Build and automatic updates without Android Studio
 
 ## Overview

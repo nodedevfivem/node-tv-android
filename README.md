@@ -1,4 +1,4 @@
-# NODE TV Android — v0.1.2
+# NODE TV Android — v0.1.3
 
 **Developed by NODE Development.** Free IPTV television player for Android phones (Android 8.0+).
 
@@ -29,14 +29,16 @@ Dedicated Android application, not a port of the Windows WPF binary. Source code
 2. Upload this project's contents to repository root, including `.github/workflows/build-apk.yml`.
 3. **Actions → NODE TV Android APK → Run workflow** (or push to main).
 4. After successful Actions build, download artifact `NODE-TV-Android-APK`.
-5. Without signing secrets, output is **DEBUG-TEST-ONLY.apk** for first device testing.
+5. Without signing secrets, output is **NODE-TV-TEST-ONLY.apk** for device testing; do not publish it.
 6. For a real distributable and future updates, configure signing secrets; see `START-HERE-GITHUB-APK-AND-UPDATES.md`.
 
 The Android GitHub repository must match `UpdateClient.java` repository constants. GitHub APK file naming matters to the updater.
 
-Not compiled or tested on Android in the originating environment. Use GitHub Actions to confirm compilation and then test on a phone.
+v0.1.3 is NOT compiled or phone-tested in this environment. v0.1.2 was shown running on a real phone, but VLC video-fit bugs were reported. Use GitHub Actions to compile v0.1.3 and test its geometry fix on the same phone.
 
 
 Latest v0.1.1: dual Media3/LibVLC playback compatibility and faster channel retries. See `START-HERE-v0.1.1-ANDROID-PLAYBACK.md`.
 
-Latest **v0.1.2**: fullscreen left brightness/right media-volume vertical swipes, center tap pause/play, native system Back to portrait, and GitHub Release banner/mandatory update marker. See `START-HERE-v0.1.2-FULLSCREEN-GESTURES-AND-GITHUB-UPDATES.md`. This source has NOT yet been compiled or device-tested; build in GitHub Actions before official release.
+Latest **v0.1.2**: fullscreen left brightness/right media-volume vertical swipes, center tap pause/play, native system Back to portrait, and GitHub Release banner/mandatory update marker. See `START-HERE-v0.1.2-FULLSCREEN-GESTURES-AND-GITHUB-UPDATES.md`. The user has since provided phone screenshots of v0.1.2 playing VLC channels, but with a resizing bug.
+
+Latest **v0.1.3**: VLC automatic video-fit/centering and viewport synchronization on portrait/fullscreen moves. Official signed installer is now **`NODE-TV.apk`**, with a versioned compatibility copy for older clients. See `START-HERE-v0.1.3-VIDEO-SCALING-AND-APK-NAMING.md`. The new fix still needs GitHub build + phone testing.

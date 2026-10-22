@@ -63,7 +63,7 @@ import java.util.concurrent.Executors;
 
 @OptIn(markerClass = UnstableApi.class)
 public final class MainActivity extends Activity {
-    private static final String VERSION="0.1.2";
+    private static final String VERSION="0.1.3";
     private static final String[] THEMES={"Vintage Amber","NODE Electric Blue","Nebula Violet","Forest Night","Crimson Theater","Graphite","Deep Teal","Copper Sunset"};
     private static final int[] ACCENTS={0xfff0ab4e,0xff42caff,0xffc29bff,0xff69c49a,0xffee7677,0xffb8c0d0,0xff4dd7cc,0xffdc884b};
     private static final int[] BACKGROUNDS={0xff101016,0xff0a1320,0xff14101f,0xff0d1915,0xff1c1014,0xff15161a,0xff0b191b,0xff211611};
@@ -247,6 +247,12 @@ public final class MainActivity extends Activity {
         });
         videoSlot.addView(vlc.view(),new FrameLayout.LayoutParams(-1,-1));
         vlc.view().setVisibility(View.GONE);
+        // The video aperture itself changes size after orientation/reparenting, sometimes
+        // without a TextureView surface-size callback. Always synchronize VLC's drawable.
+        videoSlot.addOnLayoutChangeListener((v,l,t,r,b,ol,ot,or_,ob)->{
+            if(usingVlc && ((r-l)!=(or_-ol)||(b-t)!=(ob-ot)))
+                vlc.updateViewport(r-l,b-t);
+        });
         noise=new RetroNoiseView(this);videoSlot.addView(noise,new FrameLayout.LayoutParams(-1,-1));
         signalLabel=label("NO RECEPTION",12,0xfff8e3c2,true);signalLabel.setGravity(Gravity.CENTER);
         signalLabel.setVisibility(View.GONE);videoSlot.addView(signalLabel,new FrameLayout.LayoutParams(-1,-1));
@@ -555,7 +561,10 @@ public final class MainActivity extends Activity {
                 View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY|View.SYSTEM_UI_FLAG_LAYOUT_STABLE|
                 View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN|View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION);
             root.requestApplyInsets();
-            if(usingVlc)videoSlot.post(()->vlc.afterMove());
+            if(usingVlc)videoSlot.post(()->{
+                vlc.afterMove();
+                vlc.updateViewport(videoSlot.getWidth(),videoSlot.getHeight());
+            });
         }else{
             fullscreen=false;
             ui.removeCallbacks(hideFullscreenIndicator);
@@ -570,7 +579,10 @@ public final class MainActivity extends Activity {
             getWindow().getDecorView().setSystemUiVisibility(0);
             setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_PORTRAIT);
             retroFrame.post(()->positionSlot(retroFrame.getWidth(),retroFrame.getHeight()));root.requestApplyInsets();
-            if(usingVlc)videoSlot.post(()->vlc.afterMove());
+            if(usingVlc)videoSlot.post(()->{
+                vlc.afterMove();
+                vlc.updateViewport(videoSlot.getWidth(),videoSlot.getHeight());
+            });
         }
     }
     @Override public void onBackPressed(){if(fullscreen)toggleFullscreen();else if(mandatoryUpdate){

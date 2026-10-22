@@ -7,7 +7,6 @@ import android.os.Handler;
 import android.os.Looper;
 import android.util.Log;
 import android.view.TextureView;
-import android.view.View;
 import org.videolan.libvlc.LibVLC;
 import org.videolan.libvlc.Media;
 import org.videolan.libvlc.MediaPlayer;
@@ -15,8 +14,10 @@ import org.videolan.libvlc.interfaces.IVLCVout;
 import java.util.ArrayList;
 
 /**
- * VLC fallback for streams that Android Media3 cannot decode/open. Initialized lazily on first
- * fallback, so ordinary Android-compatible channels still tune with lightweight Media3.
+ * VLC fallback for streams Media3 cannot decode/open. The same TextureView moves between
+ * the portrait TV aperture and landscape fullscreen; native VLC MUST be told the new
+ * drawable dimensions after each surface/layout change. Otherwise VLC retains the old
+ * portrait window geometry (tiny offset video in fullscreen, cropped video on return).
  */
 public final class VlcFallbackPlayer {
     public interface Listener { void onPlaying(); void onError(String reason); }
@@ -29,6 +30,7 @@ public final class VlcFallbackPlayer {
     private Channel pending;
     private boolean active, released;
     private float volume=1f;
+    private int lastWidth=-1, lastHeight=-1;
 
     public VlcFallbackPlayer(Context context,Listener listener){
         this.context=context.getApplicationContext();this.listener=listener;
@@ -39,10 +41,20 @@ public final class VlcFallbackPlayer {
                 if(!active||released)return;
                 if(pending!=null){Channel ch=pending;pending=null;start(ch);}
                 else attachView();
+                updateViewport(w,h);
             }
-            @Override public void onSurfaceTextureSizeChanged(SurfaceTexture t,int w,int h){}
-            @Override public boolean onSurfaceTextureDestroyed(SurfaceTexture t){detachView();return true;}
+            @Override public void onSurfaceTextureSizeChanged(SurfaceTexture t,int w,int h){
+                updateViewport(w,h);
+            }
+            @Override public boolean onSurfaceTextureDestroyed(SurfaceTexture t){
+                detachView();return true;
+            }
             @Override public void onSurfaceTextureUpdated(SurfaceTexture t){}
+        });
+        // A TextureView's surface-size callback is not guaranteed to fire every time its
+        // parent changes size. This also catches same-surface portrait/fullscreen moves.
+        surface.addOnLayoutChangeListener((v,l,t,r,b,ol,ot,or_,ob)->{
+            if((r-l)!=(or_-ol)||(b-t)!=(ob-ot))updateViewport(r-l,b-t);
         });
     }
     public TextureView view(){return surface;}
@@ -64,11 +76,23 @@ public final class VlcFallbackPlayer {
             int type=event.type;
             main.post(()->{
                 if(!active||released)return;
-                if(type==MediaPlayer.Event.Playing){listener.onPlaying();}
+                if(type==MediaPlayer.Event.Playing){
+                    // Hardware and software VLC outputs may learn the native video layout
+                    // only after the first decoded frames. Re-assert automatic fit then.
+                    updateViewport(surface.getWidth(),surface.getHeight());
+                    listener.onPlaying();
+                }
                 else if(type==MediaPlayer.Event.EncounteredError){listener.onError("stream unavailable on Android");}
                 else if(type==MediaPlayer.Event.EndReached){listener.onError("stream ended");}
             });
         });
+    }
+    private void fitVideoToWindow(){
+        if(engine==null)return;
+        // 0 = LibVLC automatic fit-to-drawable; null = stream's own display aspect ratio.
+        // Never force 16:9 or crop genuine 4:3/cinematic streams.
+        engine.setAspectRatio(null);
+        engine.setScale(0f);
     }
     private void attachView(){
         if(engine==null||!active||!surface.isAvailable())return;
@@ -76,9 +100,25 @@ public final class VlcFallbackPlayer {
         if(!vout.areViewsAttached()){
             vout.setVideoView(surface);
             vout.attachViews();
+            lastWidth=-1;lastHeight=-1;
+        }
+        fitVideoToWindow();
+        updateViewport(surface.getWidth(),surface.getHeight());
+    }
+    /** The containing viewport changed (even if the surface identity stayed the same). */
+    public void updateViewport(int w,int h){
+        if(!active||released||engine==null||w<=0||h<=0||!surface.isAvailable())return;
+        IVLCVout vout=engine.getVLCVout();
+        if(!vout.areViewsAttached())return;
+        if(lastWidth!=w||lastHeight!=h){
+            lastWidth=w;lastHeight=h;
+            vout.setWindowSize(w,h);
+            fitVideoToWindow();
+            Log.d("NodeTV","VLC viewport synced to "+w+"x"+h);
         }
     }
     private void detachView(){
+        lastWidth=-1;lastHeight=-1;
         if(engine==null)return;
         IVLCVout vout=engine.getVLCVout();
         if(vout.areViewsAttached())vout.detachViews();
@@ -98,6 +138,7 @@ public final class VlcFallbackPlayer {
                 engine.setMedia(media);
             }finally{media.release();}
             engine.setVolume(Math.round(volume*100));
+            fitVideoToWindow();
             engine.play();
         }catch(Throwable error){
             Log.w("NodeTV","VLC engine could not start",error);
@@ -112,7 +153,9 @@ public final class VlcFallbackPlayer {
     public void setPaused(boolean pause){
         if(engine!=null&&active){if(pause)engine.pause();else engine.play();}
     }
+    /** Detach before reparenting TextureView, without stopping the active IPTV stream. */
     public void beforeMove(){detachView();}
+    /** Reattach after parent move. A later size callback will sync the final orientation. */
     public void afterMove(){
         if(!active||released)return;
         if(surface.isAvailable())attachView();

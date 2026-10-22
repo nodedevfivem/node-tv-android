@@ -1,0 +1,62 @@
+TAG:
+v0.1.3
+
+RELEASE TITLE:
+NODE TV Android v0.1.3 — VLC Video Fit & Fullscreen Fix
+
+GITHUB RELEASE DESCRIPTION (copy ONLY text between START and END):
+====== START DESCRIPTION ======
+# NODE TV Android v0.1.3 📺
+
+**NODE Development | VLC Video Fit & Fullscreen Fix**
+
+This maintenance update addresses the video-display geometry bugs reported on Android v0.1.2, while retaining all existing NODE TV features and the Media3-to-VLC fallback engine.
+
+### 📺 Video fit & centering improvements
+- Synchronize LibVLC's native video viewport after the TextureView changes size.
+- Address small or off-center video after switching to landscape fullscreen.
+- Address enlarged or cropped video after returning to the wooden retro TV in portrait.
+- Reapply LibVLC's automatic fit mode and native stream aspect ratio instead of forcing a crop or stretch.
+- Refresh VLC display geometry on video-surface availability, size changes, container layout changes and playback startup.
+- Preserve the currently playing channel during fullscreen transitions wherever supported by the stream/device.
+- Maintain Media3 ExoPlayer's aspect-ratio-aware FIT behavior.
+
+### 🎮 Existing fullscreen controls retained
+- Swipe up/down on the left half for app-window brightness.
+- Swipe up/down on the right half for media volume.
+- Tap the center of the fullscreen video to pause / resume.
+- Use Android's normal Back gesture to return to portrait mode.
+
+### ⬇ Cleaner official installer filename
+- The official, permanently release-signed installer is now named **NODE-TV.apk**.
+- A byte-identical, versioned compatibility APK is provided in the same release so existing v0.1.2 clients can still auto-detect and install updates.
+- A SHA-256 checksum file verifies the published installer bytes.
+- Test/debug-key builds are NOT official releases; Android installation still requires user approval.
+
+### ✅ Features preserved
+- Official NODE TV retro branding and wooden television frame.
+- Worldwide and Philippines television directories, search, categories.
+- Favorites, Recently Watched, eight saved themes, CRT static/sound.
+- Media3 ExoPlayer primary playback, VideoLAN LibVLC fallback.
+- Fullscreen gesture controls and live TV playback controls.
+- GitHub new-update banner, release-controlled mandatory updates and in-app update download verification.
+
+### 📱 Application information
+- App: NODE TV Android
+- Developer: NODE Development
+- Package: `net.nodedevelopment.nodetv`
+- Version: **0.1.3** (versionCode **4**)
+- Minimum Android: Android 8.0
+- Repository: https://github.com/nodedevfivem/node-tv-android
+
+### 📦 Official GitHub release files (attach ALL THREE)
+1. `NODE-TV.apk` — **official installer to give users**
+2. `NODE-TV-Android-v0.1.3.apk` — same signed APK bytes, compatibility for v0.1.2 updater
+3. `NODE-TV-Android-v0.1.3-SHA256.txt` — checksums for both APK filenames
+
+**Release safety:** Publish only after a successful permanently signed GitHub Actions build and device validation. Never attach `NODE-TV-TEST-ONLY.apk`, signing keys or passwords to a public release. All official updates must use the same permanent signing certificate as previous official releases.
+
+<!-- NODETV_UPDATE_MODE: MANDATORY -->
+====== END DESCRIPTION ======
+
+NOTE: The mandatory marker is intentionally included. Remove it if you want this release to be optional for v0.1.2+ clients. GitHub Release upload should happen ONLY after tests pass.

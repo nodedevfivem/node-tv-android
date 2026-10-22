@@ -49,7 +49,7 @@ public final class UpdateClient {
         HttpURLConnection c=(HttpURLConnection)new URL(target).openConnection();
         c.setInstanceFollowRedirects(true);c.setConnectTimeout(14000);c.setReadTimeout(24000);
         c.setRequestProperty("Accept","application/vnd.github+json");
-        c.setRequestProperty("User-Agent","NODE-TV-Android/0.1.2");
+        c.setRequestProperty("User-Agent","NODE-TV-Android/0.1.3");
         return c;
     }
     public static int compareVersions(String a,String b){
@@ -68,16 +68,27 @@ public final class UpdateClient {
         String version=release.optString("tag_name","");
         if(!version.matches("v\\d+\\.\\d+\\.\\d+"))return null;
         if(compareVersions(version,currentVersion)<=0)return null;
-        String filename="NODE-TV-Android-"+version+".apk";
+        // Starting in v0.1.3 the friendly official installer name is NODE-TV.apk.
+        // Older v0.1.2 installations require the versioned compatibility APK and
+        // checksum on the SAME release; retain support for those assets, too.
+        String filename="NODE-TV.apk";
+        String legacyName="NODE-TV-Android-"+version+".apk";
         String shaname="NODE-TV-Android-"+version+"-SHA256.txt";
         String apk="",checksum="",digest="";long size=0;
+        String legacyApk="",legacyDigest="";long legacySize=0;
         JSONArray assets=release.optJSONArray("assets");
         if(assets==null)return null;
         for(int i=0;i<assets.length();i++){
             JSONObject item=assets.getJSONObject(i);
-            if(filename.equals(item.optString("name"))){
+            String name=item.optString("name");
+            if(filename.equals(name)){
                 apk=item.optString("browser_download_url");size=item.optLong("size");digest=item.optString("digest");
-            }else if(shaname.equals(item.optString("name")))checksum=item.optString("browser_download_url");
+            }else if(legacyName.equals(name)){
+                legacyApk=item.optString("browser_download_url");legacySize=item.optLong("size");legacyDigest=item.optString("digest");
+            }else if(shaname.equals(name))checksum=item.optString("browser_download_url");
+        }
+        if(apk.isEmpty() && !legacyApk.isEmpty()){
+            filename=legacyName;apk=legacyApk;size=legacySize;digest=legacyDigest;
         }
         // Require publisher checksum or asset digest, never install unverified data.
         if(apk.isEmpty()||size<=0||size>MAX_APK||(checksum.isEmpty()&&!digest.startsWith("sha256:")))return null;
