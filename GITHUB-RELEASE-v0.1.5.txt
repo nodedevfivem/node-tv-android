@@ -1,0 +1,48 @@
+# NODE TV Android v0.1.5 — Fullscreen Video Recovery & GitHub Release Files
+
+NODE Development | Android
+
+This update addresses the issue where a television channel continues playing audio but its video becomes black after pressing EXIT FULLSCREEN and returning to portrait mode. It also simplifies downloading the correct files from GitHub Actions.
+
+## Video playback and fullscreen fix
+- Kept the VLC/Media3 video container permanently attached to the Activity root.
+- Removed native video TextureView reparenting during fullscreen transitions.
+- Portrait and landscape only resize/reposition the SAME video container.
+- Synchronizes VLC window dimensions when the surface bounds change.
+- Maintains fitted aspect ratios inside the retro TV screen and fullscreen.
+- Maintains the on-screen EXIT FULLSCREEN button and pause/play touch controls.
+- Preserves vertical brightness and volume gestures, themes, channels and preferences.
+- Preserves ExoPlayer primary engine and VideoLAN LibVLC fallback.
+
+## GitHub Actions artifact improvements
+- The workflow now provides THREE separately downloadable OFFICIAL release assets for a successful permanently signed build:
+  1. NODE-TV.apk
+  2. NODE-TV-Android-v0.1.5.apk
+  3. NODE-TV-Android-v0.1.5-SHA256.txt
+- Also includes NODE-TV-ALL-RELEASE-FILES (a ZIP containing the same three files).
+- Each official APK is byte-identical and signed by the same permanent signing certificate.
+- The SHA-256 file is plain text (.txt), not an executable (.exe).
+- When signing secrets are missing, GitHub Actions clearly produces a TEST-ONLY APK instead and tells you how to enable official signing. NEVER publish a test APK as an official release.
+
+## Compatibility and release information
+- Version name: 0.1.5
+- Version code: 6
+- Android package: net.nodedevelopment.nodetv
+- Minimum Android: 8.0
+- Official downloadable app name: NODE-TV.apk
+- Official release tag: v0.1.5
+- Keep prior installed official releases signed by the SAME keystore for in-place installation.
+- Publishing a GitHub Release (not merely Actions artifact) is necessary for live update notifications.
+
+## Required user testing before publication
+1. GitHub Actions Android compilation succeeds; download signed or test APK as appropriate.
+2. Verify VLC streams show VIDEO and AUDIO in portrait.
+3. Enter fullscreen, watch moving video, tap EXIT FULLSCREEN, confirm video remains visible in portrait and audio continues.
+4. Repeat portrait → fullscreen → portrait 5+ times on multiple channels. Test paused and actively playing video.
+5. Test ExoPlayer and VLC, app rotation, channel changes, volume/brightness swipes.
+6. Verify three official assets exist if signing secrets are configured, and that GitHub Release installs over previous version using the same signing identity.
+7. Verify mandatory-update notification appears for an already installed older permanently signed version when the new Release is PUBLISHED.
+
+Status: SOURCE ONLY. Static packaging checks performed; actual Gradle compilation and physical Android testing NOT performed in this environment.
+
+<!-- NODETV_UPDATE_MODE: MANDATORY -->

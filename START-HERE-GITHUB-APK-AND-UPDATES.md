@@ -1,3 +1,5 @@
+> **CURRENT v0.1.5 RELEASE PROCESS:** For `v0.1.5` source fixes and correct artifact links, read `START-HERE-v0.1.5-VIDEO-SURFACE-AND-ARTIFACT-FIX.md` FIRST. The v0.1.0-v0.1.4 instructions below are historical. A successful TEST build creates only TEST files, NOT 3 official assets. An OFFICIAL signing-configured GitHub Actions run creates 3 separately downloadable official release assets PLUS a bundled ZIP. The SHA-256 file ends in `.txt` (NOT `.exe`).
+
 > **CURRENT v0.1.4 GITHUB INSTRUCTIONS:** See `START-HERE-v0.1.4-MANDATORY-UPDATES-EXIT-CONTROL.md` and `GITHUB-RELEASE-v0.1.4.txt`. The older v0.1.0 filenames and version codes below are historical. Official release assets are `NODE-TV.apk`, `NODE-TV-Android-v0.1.4.apk` and `NODE-TV-Android-v0.1.4-SHA256.txt`; all must be permanently signed; do NOT publish test APKs.
 
 > **v0.1.3 CURRENT APK NAMING:** Official signed installer is `NODE-TV.apk`, plus identical `NODE-TV-Android-v0.1.3.apk` for v0.1.2 client compatibility and `NODE-TV-Android-v0.1.3-SHA256.txt` for both checksums. Old naming below is historical; see `START-HERE-v0.1.3-VIDEO-SCALING-AND-APK-NAMING.md`. Do not publish `NODE-TV-TEST-ONLY.apk`.

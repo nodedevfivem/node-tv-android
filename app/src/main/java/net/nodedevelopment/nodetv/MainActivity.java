@@ -63,7 +63,7 @@ import java.util.concurrent.Executors;
 
 @OptIn(markerClass = UnstableApi.class)
 public final class MainActivity extends Activity {
-    private static final String VERSION="0.1.4";
+    private static final String VERSION="0.1.5";
     private static final String[] THEMES={"Vintage Amber","NODE Electric Blue","Nebula Violet","Forest Night","Crimson Theater","Graphite","Deep Teal","Copper Sunset"};
     private static final int[] ACCENTS={0xfff0ab4e,0xff42caff,0xffc29bff,0xff69c49a,0xffee7677,0xffb8c0d0,0xff4dd7cc,0xffdc884b};
     private static final int[] BACKGROUNDS={0xff101016,0xff0a1320,0xff14101f,0xff0d1915,0xff1c1014,0xff15161a,0xff0b191b,0xff211611};
@@ -97,6 +97,11 @@ public final class MainActivity extends Activity {
     private AudioManager audioManager;
     private float gestureStartBrightness, originalWindowBrightness=-1f;
     private int gestureStartMediaVolume, gestureMaxMediaVolume=1;
+    // videoSlot is permanently parented to root. Never reparent a live TextureView:
+    // that destroys its native output surface on some Android devices (audio-only VLC).
+    // Move/resize only its FrameLayout bounds while the surface stays attached.
+    private int lastVideoLeft=Integer.MIN_VALUE,lastVideoTop=Integer.MIN_VALUE;
+    private int lastVideoWidth=Integer.MIN_VALUE,lastVideoHeight=Integer.MIN_VALUE;
     private final Runnable hideFullscreenIndicator=()->{if(fullscreenIndicator!=null)fullscreenIndicator.setVisibility(View.GONE);};
     private final Runnable hideFullscreenExit=()->{
         if(fullscreenExitButton!=null)fullscreenExitButton.setVisibility(View.GONE);
@@ -236,11 +241,14 @@ public final class MainActivity extends Activity {
 
         retroFrame=new FrameLayout(this){@Override protected void onMeasure(int w,int h){
             int width=View.MeasureSpec.getSize(w);super.onMeasure(View.MeasureSpec.makeMeasureSpec(width,View.MeasureSpec.EXACTLY),View.MeasureSpec.makeMeasureSpec(width*2/3,View.MeasureSpec.EXACTLY));
-        } @Override protected void onSizeChanged(int w,int h,int oldw,int oldh){super.onSizeChanged(w,h,oldw,oldh);positionSlot(w,h);} };
+        } };
         retroFrame.setBackgroundColor(0xff1b1c24);
         mainColumn.addView(retroFrame,new LinearLayout.LayoutParams(-1,-2));
         videoSlot=new FrameLayout(this);videoSlot.setBackgroundColor(Color.BLACK);
-        retroFrame.addView(videoSlot,new FrameLayout.LayoutParams(dp(200),dp(160)));
+        // Root-level overlay: this is the ONE stable parent for the video surfaces.
+        // In portrait we precisely place it inside the retro-TV picture aperture;
+        // in landscape we resize it to fullscreen WITHOUT detaching VLC's TextureView.
+        root.addView(videoSlot,new FrameLayout.LayoutParams(dp(200),dp(160)));
         videoSlot.addView(playerView,new FrameLayout.LayoutParams(-1,-1));
         // The LibVLC view stays in the exact same TV viewport. It is only visible on fallback.
         vlc=new VlcFallbackPlayer(this,new VlcFallbackPlayer.Listener(){
@@ -253,8 +261,8 @@ public final class MainActivity extends Activity {
         });
         videoSlot.addView(vlc.view(),new FrameLayout.LayoutParams(-1,-1));
         vlc.view().setVisibility(View.GONE);
-        // The video aperture itself changes size after orientation/reparenting, sometimes
-        // without a TextureView surface-size callback. Always synchronize VLC's drawable.
+        // The stable video aperture changes dimensions without ever losing its parent.
+        // Always synchronize VLC's drawable on size changes.
         videoSlot.addOnLayoutChangeListener((v,l,t,r,b,ol,ot,or_,ob)->{
             if(usingVlc && ((r-l)!=(or_-ol)||(b-t)!=(ob-ot)))
                 vlc.updateViewport(r-l,b-t);
@@ -329,7 +337,10 @@ public final class MainActivity extends Activity {
         });
         TextView version=label("v"+VERSION+" ↻",10,0xffa29b93,false);footer.addView(version);
         version.setOnClickListener(v->checkUpdates(true)); // Optional manual refresh retained, moved out of header.
-        fullscreenLayer=new FrameLayout(this);fullscreenLayer.setBackgroundColor(Color.BLACK);fullscreenLayer.setVisibility(View.GONE);
+        fullscreenLayer=new FrameLayout(this);
+        // Transparent HUD sits ABOVE root-level videoSlot; root provides black backdrop.
+        fullscreenLayer.setBackgroundColor(Color.TRANSPARENT);
+        fullscreenLayer.setVisibility(View.GONE);
         root.addView(fullscreenLayer,new FrameLayout.LayoutParams(-1,-1));
         gestureView=new FullscreenGestureView(this,new FullscreenGestureView.Listener(){
             @Override public void onSwipeStart(boolean brightnessSide){
@@ -374,15 +385,47 @@ public final class MainActivity extends Activity {
         fullscreenLayer.addView(fullscreenExitButton,exitParams);
         fullscreenExitButton.setOnClickListener(v->toggleFullscreen());
         createMandatoryOverlay();
+        // Handle rotations, update-banner insertion, and window-inset changes using
+        // bounds only. Never remove the live TextureView from its parent.
+        root.getViewTreeObserver().addOnGlobalLayoutListener(this::layoutVideoSlot);
         // Start with a real channel catalog, then show whatever is available.
         populateCategories();
     }
     private final Runnable filterDelay=this::applyFilter;
 
-    private void positionSlot(int w,int h){
-        if(fullscreen||videoSlot==null||videoSlot.getParent()!=retroFrame)return;
-        FrameLayout.LayoutParams p=new FrameLayout.LayoutParams((int)(w*.610f),(int)(h*.621f));
-        p.leftMargin=(int)(w*.127f);p.topMargin=(int)(h*.173f);videoSlot.setLayoutParams(p);
+    /** Position video surface WITHOUT changing its parent or destroying native output.
+     *  Called after root/TV layout and whenever the header/update banner changes size.
+     *  The aperture numbers are calibrated to the transparent window in retro_frame.png.
+     */
+    private void layoutVideoSlot(){
+        if(root==null||videoSlot==null)return;
+        if(fullscreen){
+            int w=root.getWidth()-root.getPaddingLeft()-root.getPaddingRight();
+            int h=root.getHeight()-root.getPaddingTop()-root.getPaddingBottom();
+            updateVideoSlotBounds(0,0,w,h);
+            return;
+        }
+        if(retroFrame==null||retroFrame.getWidth()==0||retroFrame.getHeight()==0
+            ||retroFrame.getVisibility()!=View.VISIBLE)return;
+        int[] frame=new int[2], parent=new int[2];
+        retroFrame.getLocationOnScreen(frame);
+        root.getLocationOnScreen(parent);
+        int w=retroFrame.getWidth(),h=retroFrame.getHeight();
+        int left=frame[0]-parent[0]-root.getPaddingLeft()+Math.round(w*.127f);
+        int top=frame[1]-parent[1]-root.getPaddingTop()+Math.round(h*.173f);
+        updateVideoSlotBounds(left,top,Math.round(w*.610f),Math.round(h*.621f));
+    }
+    private void updateVideoSlotBounds(int left,int top,int width,int height){
+        if(width<=0||height<=0)return;
+        if(left==lastVideoLeft&&top==lastVideoTop
+            &&width==lastVideoWidth&&height==lastVideoHeight)return;
+        lastVideoLeft=left;lastVideoTop=top;
+        lastVideoWidth=width;lastVideoHeight=height;
+        FrameLayout.LayoutParams params=new FrameLayout.LayoutParams(width,height,Gravity.TOP|Gravity.LEFT);
+        params.leftMargin=left;params.topMargin=top;
+        videoSlot.setLayoutParams(params);
+        // Native VLC still needs to learn the new drawable bounds, but never detach it.
+        if(usingVlc)videoSlot.post(()->vlc.updateViewport(videoSlot.getWidth(),videoSlot.getHeight()));
     }
     private void setMode(int tab){
         mode=tab;
@@ -580,42 +623,38 @@ public final class MainActivity extends Activity {
     private void toggleFullscreen(){
         if(!fullscreen){
             if(mandatoryUpdate)return;
-            fullscreen=true;
             originalWindowBrightness=getWindow().getAttributes().screenBrightness;
-            if(usingVlc)vlc.beforeMove();
-            retroFrame.removeView(videoSlot);
-            fullscreenLayer.addView(videoSlot,0,new FrameLayout.LayoutParams(-1,-1));
-            fullscreenLayer.setVisibility(View.VISIBLE);mainColumn.setVisibility(View.GONE);
+            fullscreen=true;
+            // Keep mainColumn attached and hide it only visually: videoSlot is a root
+            // sibling and will NEVER be removed/reparented while streaming.
+            mainColumn.setVisibility(View.GONE);
+            root.setBackgroundColor(Color.BLACK);
+            fullscreenLayer.setVisibility(View.VISIBLE);
             setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE);
             getWindow().getDecorView().setSystemUiVisibility(
                 View.SYSTEM_UI_FLAG_FULLSCREEN|View.SYSTEM_UI_FLAG_HIDE_NAVIGATION|
                 View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY|View.SYSTEM_UI_FLAG_LAYOUT_STABLE|
                 View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN|View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION);
             root.requestApplyInsets();
-            if(usingVlc)videoSlot.post(()->{
-                vlc.afterMove();
-                vlc.updateViewport(videoSlot.getWidth(),videoSlot.getHeight());
-            });
+            layoutVideoSlot();
         }else{
             fullscreen=false;
             ui.removeCallbacks(hideFullscreenExit);
             if(fullscreenExitButton!=null)fullscreenExitButton.setVisibility(View.GONE);
             ui.removeCallbacks(hideFullscreenIndicator);
-            fullscreenIndicator.setVisibility(View.GONE);
-            WindowManager.LayoutParams windowParams=getWindow().getAttributes();
-            windowParams.screenBrightness=originalWindowBrightness;
-            getWindow().setAttributes(windowParams);
-            if(usingVlc)vlc.beforeMove();
-            fullscreenLayer.removeView(videoSlot);
-            retroFrame.addView(videoSlot,0,new FrameLayout.LayoutParams(dp(200),dp(160)));
-            fullscreenLayer.setVisibility(View.GONE);mainColumn.setVisibility(View.VISIBLE);
+            if(fullscreenIndicator!=null)fullscreenIndicator.setVisibility(View.GONE);
+            WindowManager.LayoutParams params=getWindow().getAttributes();
+            params.screenBrightness=originalWindowBrightness;
+            getWindow().setAttributes(params);
+            fullscreenLayer.setVisibility(View.GONE);
+            root.setBackgroundColor(BACKGROUNDS[store.theme()]);
+            mainColumn.setVisibility(View.VISIBLE);
             getWindow().getDecorView().setSystemUiVisibility(0);
             setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_PORTRAIT);
-            retroFrame.post(()->positionSlot(retroFrame.getWidth(),retroFrame.getHeight()));root.requestApplyInsets();
-            if(usingVlc)videoSlot.post(()->{
-                vlc.afterMove();
-                vlc.updateViewport(videoSlot.getWidth(),videoSlot.getHeight());
-            });
+            root.requestApplyInsets();
+            // Global layout listener will apply the final portrait aperture after
+            // Android's orientation/insets/layout settle, without touching the surface.
+            ui.post(this::layoutVideoSlot);
         }
     }
     @Override public void onBackPressed(){if(fullscreen)toggleFullscreen();else if(mandatoryUpdate){

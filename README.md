@@ -1,4 +1,4 @@
-# NODE TV Android — v0.1.4
+# NODE TV Android — v0.1.5
 
 **Developed by NODE Development.** Free IPTV television player for Android phones (Android 8.0+).
 
@@ -28,13 +28,13 @@ Dedicated Android application, not a port of the Windows WPF binary. Source code
 1. Create public GitHub repository `nodedevfivem/NODE-TV-Android`.
 2. Upload this project's contents to repository root, including `.github/workflows/build-apk.yml`.
 3. **Actions → NODE TV Android APK → Run workflow** (or push to main).
-4. After successful Actions build, download artifact `NODE-TV-Android-APK`.
+4. After successful Actions build, download the **individual** signed APK/checksum artifacts, or the `NODE-TV-ALL-RELEASE-FILES` bundle.
 5. Without signing secrets, output is **NODE-TV-TEST-ONLY.apk** for device testing; do not publish it.
 6. For a real distributable and future updates, configure signing secrets; see `START-HERE-GITHUB-APK-AND-UPDATES.md`.
 
 The Android GitHub repository must match `UpdateClient.java` repository constants. GitHub APK file naming matters to the updater.
 
-v0.1.4 has NOT been compiled or phone-tested in this environment. User-provided screenshots demonstrated that v0.1.2 ran on Android, but later v0.1.3 VLC video geometry fixes have not yet been phone-verified. Use GitHub Actions to compile, test playback and updater behavior before publishing an official release.
+v0.1.5 is a SOURCE-ONLY fix and has NOT been compiled or phone-tested in this environment. User reports v0.1.4 produces audio-only black video after exiting fullscreen; the v0.1.5 stable root-level video surface removes reparenting that can trigger this. Run GitHub Actions and test phone playback before publishing.
 
 
 Latest v0.1.1: dual Media3/LibVLC playback compatibility and faster channel retries. See `START-HERE-v0.1.1-ANDROID-PLAYBACK.md`.
@@ -44,3 +44,5 @@ Latest **v0.1.2**: fullscreen left brightness/right media-volume vertical swipes
 Latest **v0.1.3**: VLC automatic video-fit/centering and viewport synchronization on portrait/fullscreen moves. Official signed installer is now **`NODE-TV.apk`**, with a versioned compatibility copy for older clients. See `START-HERE-v0.1.3-VIDEO-SCALING-AND-APK-NAMING.md`. The new fix still needs GitHub build + phone testing.
 
 Latest **v0.1.4**: persistent mandatory GitHub Release update gate and an on-screen EXIT FULLSCREEN button revealed by tapping landscape video; middle tap still pauses/resumes. The official signed APK is still `NODE-TV.apk`. See `START-HERE-v0.1.4-MANDATORY-UPDATES-EXIT-CONTROL.md` and `GITHUB-RELEASE-v0.1.4.txt`.
+
+Latest **v0.1.5**: critical portrait black-video/audio-only fix after fullscreen exit. `videoSlot` now stays under the root parent from app start to app shutdown; fullscreen/portrait only change bounds, rather than detaching VLC's TextureView. GitHub Actions now explicitly surfaces all **three official signed release assets as individually downloadable artifacts**, plus a release ZIP containing all three. Without permanent signing secrets, ONLY TEST APKs will be produced; this is intentional. See `START-HERE-v0.1.5-VIDEO-SURFACE-AND-ARTIFACT-FIX.md`.

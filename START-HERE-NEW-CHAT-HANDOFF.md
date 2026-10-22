@@ -1,3 +1,7 @@
+# Current milestone: NODE TV Android v0.1.5 source-only candidate
+
+The latest canonical source in this archive is **v0.1.5 (versionCode 6)**, based on v0.1.4, with a stable root-owned videoSlot instead of reparenting the live TextureView on fullscreen/portrait transitions. Fixes reported audio-only black picture after EXIT FULLSCREEN. GitHub Actions uploads 3 individually downloadable signed release files, plus bundle, only when the four permanent signing secrets are configured. Read `START-HERE-v0.1.5-VIDEO-SURFACE-AND-ARTIFACT-FIX.md` before any GitHub Release. Compiling and phone behavior are UNVERIFIED. Older version sections below are history.
+
 > **CURRENT SOURCE v0.1.4 (2026-10-22).** This old handoff records the original v0.1.1 source for provenance only. Current canonical source is v0.1.4 / versionCode 5 (derived from the complete v0.1.3 archive). See `START-HERE-v0.1.4-MANDATORY-UPDATES-EXIT-CONTROL.md` for latest GitHub mandatory-update flow, fullscreen exit button and honest unverified build status.
 
 > **CURRENT SOURCE v0.1.3** — This is the historical v0.1.1 handoff retained for provenance. The canonical source in this ZIP is v0.1.3 (versionCode 4), based on the user-tested v0.1.2 source. See `START-HERE-v0.1.3-VIDEO-SCALING-AND-APK-NAMING.md` for changes, official NODE-TV.apk naming, build/release instructions and unverified v0.1.3 status.

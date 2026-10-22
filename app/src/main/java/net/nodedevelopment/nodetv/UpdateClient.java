@@ -49,7 +49,7 @@ public final class UpdateClient {
         HttpURLConnection c=(HttpURLConnection)new URL(target).openConnection();
         c.setInstanceFollowRedirects(true);c.setConnectTimeout(14000);c.setReadTimeout(24000);
         c.setRequestProperty("Accept","application/vnd.github+json");
-        c.setRequestProperty("User-Agent","NODE-TV-Android/0.1.4");
+        c.setRequestProperty("User-Agent","NODE-TV-Android/0.1.5");
         return c;
     }
     public static int compareVersions(String a,String b){
